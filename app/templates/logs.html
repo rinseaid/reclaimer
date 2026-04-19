@@ -7,10 +7,20 @@
     .gtable { width: 100%; }
     .gtable-header, .gtable-filter, .gtable-row {
         display: grid;
-        grid-template-columns: 175px 110px 200px 1fr;
+        grid-template-columns: 175px 140px 200px 1fr;
         gap: 0 0.5rem;
         padding: 0 4px;
         align-items: center;
+    }
+    /* Keep cell content inside its track -- prevents long pills (or the raw
+       event_type fallback for unmapped labels) from overrunning the Rule
+       column. min-width: 0 lets the grid child actually shrink. */
+    .gtable-row > div,
+    .gtable-header > div,
+    .gtable-filter > div {
+        min-width: 0;
+        overflow: hidden;
+        text-overflow: ellipsis;
     }
     .gtable-header { padding-left: calc(4px + 0.5rem); }
     .gtable-header > div:first-child { margin-left: -0.5rem; }
@@ -36,7 +46,7 @@
     /* Responsive: collapse the "Rule" column on narrow viewports */
     @media (max-width: 768px) {
         .gtable-header, .gtable-filter, .gtable-row {
-            grid-template-columns: 100px 90px 1fr;
+            grid-template-columns: 100px 120px 1fr;
         }
         .gtable-header > div:nth-child(3),
         .gtable-filter > div:nth-child(3),
@@ -123,6 +133,8 @@ const EVENT_LABELS = {
     item_deleted: 'Item Deleted',
     item_actioned: 'Item Actioned',
     item_action_failed: 'Action Failed',
+    item_added_to_keep: 'Added to Keep',
+    item_removed_from_keep: 'Removed from Keep',
     collection_sync_failed: 'Sync Failed',
     collection_sync_summary: 'Sync Summary',
     run_error: 'Run Error',
@@ -138,6 +150,8 @@ const EVENT_PILL_CLASSES = {
     item_deleted:    'bg-rose-500/15 text-rose-400',
     item_actioned:   'bg-rose-500/15 text-rose-400',
     item_action_failed: 'bg-rose-500/15 text-rose-400',
+    item_added_to_keep: 'bg-sky-500/15 text-sky-400',
+    item_removed_from_keep: 'bg-zinc-500/15 text-zinc-400',
     collection_sync_failed: 'bg-rose-500/15 text-rose-400',
     collection_sync_summary: 'bg-zinc-500/15 text-zinc-400',
     run_error:       'bg-rose-500/15 text-rose-400',
