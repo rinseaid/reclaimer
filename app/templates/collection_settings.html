@@ -891,7 +891,7 @@ function renderSettings(cfg, rules, behavior, protectedUsers, protectedTags, pro
                 onchange="applyPipelineTemplate(this.value); this.value='';"
                 class="bg-zinc-900 border border-zinc-700 rounded-md px-3 py-2 text-sm text-zinc-300 focus:border-indigo-500 focus:outline-none">
           <option value="">Choose a template…</option>
-          <option value="reclaim_from_debrid">Reclaim from debrid (tag + delete + re-grab)</option>
+          <option value="offload_local_copy">Offload local copy (tag + delete + re-grab)</option>
           <option value="migrate_to_cloud">Migrate to cloud storage</option>
           <option value="migrate_to_local">Migrate to local storage</option>
           <option value="promote_to_4k">Promote to 4K instance</option>
@@ -1979,16 +1979,16 @@ function addPipelineStep() {
    warns on anything blank.
 ------------------------------------------------------------------ */
 const PIPELINE_TEMPLATES = {
-  // Pragmatic "move old seasons to cloud" pattern for stacks where a
-  // debrid-aware download client (e.g. decypharr) is gated by an arr
-  // tag. Tag FIRST so future grabs route through the debrid indexer +
-  // client, then delete_files removes the local copies and trigger_search
-  // repopulates as symlinks into decypharr's rclone mount. Tags are
-  // series-level in Sonarr, so this affects every future grab for the
-  // series -- set indexer priorities accordingly if you want the latest
-  // season to still grab locally.
-  reclaim_from_debrid: [
-    { type: 'add_arr_tag', command: 'debrid' },
+  // "Offload local copy": pragmatic pattern for stacks where a
+  // tag-gated download client produces symlinks into a remote-backed
+  // mount (e.g. decypharr + rclone). Tag FIRST so future arr grabs
+  // route through that client, then delete_files removes local copies
+  // and trigger_search repopulates the same root folder with symlinks.
+  // Tags are series-level in Sonarr, so this affects every future grab
+  // for the series -- set indexer priorities accordingly if you want
+  // the latest season to still grab locally.
+  offload_local_copy: [
+    { type: 'add_arr_tag', command: '' },
     { type: 'delete_files', command: '' },
     { type: 'trigger_search', command: '' },
   ],
