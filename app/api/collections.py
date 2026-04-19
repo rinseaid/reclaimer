@@ -458,7 +458,7 @@ def export_collections():
         "exported_at": now.isoformat(),
         "rules": rules,
     }
-    filename = f"mcm-rules-{now.strftime('%Y-%m-%d')}.json"
+    filename = f"jettison-rules-{now.strftime('%Y-%m-%d')}.json"
     return JSONResponse(
         content=payload,
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},

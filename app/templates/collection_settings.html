@@ -33,7 +33,7 @@
               class="px-4 py-2 text-sm rounded-md bg-rose-500 text-white border-none transition-colors opacity-50 cursor-not-allowed"
               onclick="confirmDelete()">Delete Rule</button>
     </div>
-    <div class="mcm-kbd-hint"><span>Press</span> <kbd class="mcm-kbd">Esc</kbd> <span>to close</span></div>
+    <div class="jettison-kbd-hint"><span>Press</span> <kbd class="jettison-kbd">Esc</kbd> <span>to close</span></div>
   </div>
 </dialog>
 
@@ -48,7 +48,7 @@
       <button type="button" id="pipeline-confirm-save-btn"
               class="px-4 py-2 text-sm rounded-md bg-rose-500 hover:bg-rose-400 text-white transition-colors">Save</button>
     </div>
-    <div class="mcm-kbd-hint"><span>Press</span> <kbd class="mcm-kbd">Esc</kbd> <span>to close</span></div>
+    <div class="jettison-kbd-hint"><span>Press</span> <kbd class="jettison-kbd">Esc</kbd> <span>to close</span></div>
   </div>
 </dialog>
 
@@ -503,7 +503,7 @@ function sectionHtml(sectionKey, title, innerHtml, opts) {
   opts = opts || {};
   let openAttr = opts.defaultClosed ? '' : 'open';
   try {
-    const saved = localStorage.getItem('mcm-section-' + sectionKey);
+    const saved = localStorage.getItem('jettison-section-' + sectionKey);
     if (saved === 'closed') openAttr = '';
     else if (saved === 'open') openAttr = 'open';
   } catch (_) {}
@@ -905,9 +905,9 @@ function renderSettings(cfg, rules, behavior, protectedUsers, protectedTags, pro
           Script environment variables
         </summary>
         <div class="mt-2 p-3 bg-zinc-900 rounded-lg border border-zinc-800 text-[0.7rem] text-zinc-500 font-mono leading-relaxed">
-          MCM_ITEM_TITLE &middot; MCM_ITEM_RATING_KEY &middot; MCM_ITEM_MEDIA_TYPE &middot; MCM_ITEM_COLLECTION &middot;
-          MCM_ITEM_TMDB_ID &middot; MCM_ITEM_TVDB_ID &middot; MCM_ITEM_IMDB_ID &middot;
-          MCM_ITEM_SIZE_BYTES &middot; MCM_RADARR_ID &middot; MCM_SONARR_ID &middot; MCM_RADARR_URL &middot; MCM_SONARR_URL
+          JETTISON_ITEM_TITLE &middot; JETTISON_ITEM_RATING_KEY &middot; JETTISON_ITEM_MEDIA_TYPE &middot; JETTISON_ITEM_COLLECTION &middot;
+          JETTISON_ITEM_TMDB_ID &middot; JETTISON_ITEM_TVDB_ID &middot; JETTISON_ITEM_IMDB_ID &middot;
+          JETTISON_ITEM_SIZE_BYTES &middot; JETTISON_RADARR_ID &middot; JETTISON_SONARR_ID &middot; JETTISON_RADARR_URL &middot; JETTISON_SONARR_URL
         </div>
       </details>
     </div><!-- /tab-action -->
@@ -1001,7 +1001,7 @@ function renderSettings(cfg, rules, behavior, protectedUsers, protectedTags, pro
       const key = det.getAttribute('data-section-key');
       if (!key) return;
       try {
-        localStorage.setItem('mcm-section-' + key, det.open ? 'open' : 'closed');
+        localStorage.setItem('jettison-section-' + key, det.open ? 'open' : 'closed');
       } catch (_) {}
     });
   });
@@ -1023,7 +1023,7 @@ function renderSettings(cfg, rules, behavior, protectedUsers, protectedTags, pro
 /* ------------------------------------------------------------------
    Inline help tooltips.
 
-   The tooltip utility itself (`.mcm-tooltip` + data-tooltip) lives in
+   The tooltip utility itself (`.jettison-tooltip` + data-tooltip) lives in
    base.html. This map describes every card / section we want to annotate;
    `attachTooltips()` walks the DOM after render and injects a (?) badge
    next to each known title.
@@ -1061,17 +1061,17 @@ function tooltipBadge(text) {
   // Use a <button> so keyboard users get focus navigation for free.
   // Text content is "?" but the attr is what renders in the bubble.
   const escaped = String(text).replace(/"/g, '&quot;');
-  return `<button type="button" class="mcm-tooltip ml-1.5" data-tooltip="${escaped}" aria-label="More info" tabindex="0">?</button>`;
+  return `<button type="button" class="jettison-tooltip ml-1.5" data-tooltip="${escaped}" aria-label="More info" tabindex="0">?</button>`;
 }
 
 function clampTooltipToViewport(el) {
   // Auto-apply edge classes so the bubble never clips.
-  el.classList.remove('mcm-tooltip--left', 'mcm-tooltip--right', 'mcm-tooltip--above');
+  el.classList.remove('jettison-tooltip--left', 'jettison-tooltip--right', 'jettison-tooltip--above');
   const r = el.getBoundingClientRect();
   const halfBubble = 140; // max-width 280px / 2
-  if (r.left - halfBubble < 8)               el.classList.add('mcm-tooltip--left');
-  else if (r.right + halfBubble > window.innerWidth - 8) el.classList.add('mcm-tooltip--right');
-  if (r.bottom + 180 > window.innerHeight)   el.classList.add('mcm-tooltip--above');
+  if (r.left - halfBubble < 8)               el.classList.add('jettison-tooltip--left');
+  else if (r.right + halfBubble > window.innerWidth - 8) el.classList.add('jettison-tooltip--right');
+  if (r.bottom + 180 > window.innerHeight)   el.classList.add('jettison-tooltip--above');
 }
 
 function attachTooltips() {
@@ -1080,19 +1080,19 @@ function attachTooltips() {
     const card = document.getElementById('card-' + cardId);
     if (!card) return;
     const titleEl = card.querySelector('.font-semibold');
-    if (!titleEl || titleEl.querySelector('.mcm-tooltip')) return;
+    if (!titleEl || titleEl.querySelector('.jettison-tooltip')) return;
     titleEl.insertAdjacentHTML('beforeend', tooltipBadge(text));
   });
   // Non-card sections: look for font-semibold divs whose text matches a key.
   document.querySelectorAll('#settings-body .font-semibold').forEach(el => {
-    if (el.querySelector('.mcm-tooltip')) return;
+    if (el.querySelector('.jettison-tooltip')) return;
     const txt = (el.textContent || '').trim();
     if (SECTION_TOOLTIPS[txt]) {
       el.insertAdjacentHTML('beforeend', tooltipBadge(SECTION_TOOLTIPS[txt]));
     }
   });
   // Wire edge-clamping. Recompute on focus/hover in case the layout shifted.
-  document.querySelectorAll('.mcm-tooltip').forEach(el => {
+  document.querySelectorAll('.jettison-tooltip').forEach(el => {
     const handler = () => clampTooltipToViewport(el);
     el.addEventListener('mouseenter', handler);
     el.addEventListener('focus', handler);

@@ -823,14 +823,14 @@ def _fire_immediate_notifies(pipeline: list[dict], item_row: dict) -> None:
         if stype == "notify":
             template = (step.get("command") or "").strip()
             if not template:
-                template = "MCM: {collection} flagged '{title}' for action on {grace_expires}"
+                template = "Jettison: {collection} flagged '{title}' for action on {grace_expires}"
             subs = _build_notify_substitutions(
                 item_row, item_row.get("collection") or "",
                 item_row.get("grace_expires"),
                 "detected",
             )
             body = _render_notify_template(template, subs)
-            ntitle = f"MCM -- {item_row.get('collection') or 'rule'}"
+            ntitle = f"Jettison -- {item_row.get('collection') or 'rule'}"
             ok_n, detail_n = _send_notify(apprise_url, body, ntitle)
             if not ok_n:
                 log.warning("immediate notify failed for %s: %s", title, detail_n)
@@ -1143,12 +1143,12 @@ def _run_after_grace_for_item(
                 import subprocess as _sp
                 env = {
                     **_os.environ,
-                    "MCM_RATING_KEY": item["rating_key"] or "",
-                    "MCM_TITLE": title or "",
-                    "MCM_COLLECTION": item["collection"] or "",
-                    "MCM_MEDIA_TYPE": media_type or "",
-                    "MCM_ARR_ID": str(arr_id or ""),
-                    "MCM_SEASON_NUMBER": str(season_num if season_num is not None else ""),
+                    "JETTISON_RATING_KEY": item["rating_key"] or "",
+                    "JETTISON_TITLE": title or "",
+                    "JETTISON_COLLECTION": item["collection"] or "",
+                    "JETTISON_MEDIA_TYPE": media_type or "",
+                    "JETTISON_ARR_ID": str(arr_id or ""),
+                    "JETTISON_SEASON_NUMBER": str(season_num if season_num is not None else ""),
                 }
                 result = _sp.run(cmd, shell=True, env=env, capture_output=True, timeout=60)
                 if result.returncode != 0:
@@ -1165,14 +1165,14 @@ def _run_after_grace_for_item(
             for s in notify_steps:
                 template = (s.get("command") or "").strip()
                 if not template:
-                    template = "MCM: {collection} flagged '{title}' for action on {grace_expires}"
+                    template = "Jettison: {collection} flagged '{title}' for action on {grace_expires}"
                 subs = _build_notify_substitutions(
                     item, item.get("collection") or "",
                     item.get("grace_expires"),
                     action_summary,
                 )
                 body = _render_notify_template(template, subs)
-                ntitle = f"MCM -- {item.get('collection') or 'rule'}"
+                ntitle = f"Jettison -- {item.get('collection') or 'rule'}"
                 if dry_run:
                     actions.append(f"would notify ({body!r})")
                 else:
@@ -1445,7 +1445,7 @@ def run_orchestrator(dry_run: bool = False, rule_filter: str | None = None) -> N
     """
     t0 = time.time()
     today = date.today()
-    log.info("=== MCM Run %s%s===",
+    log.info("=== Jettison Run %s%s===",
              "(DRY RUN) " if dry_run else "",
              f"[rule={rule_filter}] " if rule_filter else "")
 

@@ -1,4 +1,4 @@
-"""FastAPI application - Media Collection Manager."""
+"""FastAPI application - Jettison."""
 from __future__ import annotations
 
 import logging
@@ -140,7 +140,7 @@ def _sync_users_task():
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
-    log.info("Starting Media Collection Manager")
+    log.info("Starting Jettison")
     init_db()
     config.init_settings()
 
@@ -184,7 +184,7 @@ async def lifespan(app: FastAPI):
 
 
 app = FastAPI(
-    title="Media Collection Manager",
+    title="Jettison",
     version="2.0.0",
     lifespan=lifespan,
 )

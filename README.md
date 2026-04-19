@@ -7,11 +7,9 @@ ordered action pipelines in Radarr and Sonarr -- tagging, searching,
 moving to other root folders, migrating between arr instances, or
 deleting.
 
-Previously lived as "Media Collection Manager" inside the
-rinseaid/komodo GitOps repo. Split into its own repo so it can evolve
-on its own release cycle. Deployment stays in rinseaid/komodo -- the
-compose + TOML live there and reference the image published by the
-GitHub Actions workflow in this repo.
+Deployment lives in rinseaid/komodo -- the compose + TOML there
+reference the image published by the GitHub Actions workflow in this
+repo.
 
 ## Run locally
 
@@ -22,7 +20,7 @@ uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
 
 UI at http://localhost:8080. First run seeds defaults from environment
 variables (see `app/config.py` / `app/database.py`); after that the
-SQLite DB at `/app/data/mcm.db` is the source of truth.
+SQLite DB at `/app/data/jettison.db` is the source of truth.
 
 ## Build the image
 
