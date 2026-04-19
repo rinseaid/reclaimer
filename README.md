@@ -1,15 +1,17 @@
-# Media Collection Manager (MCM)
+# Jettison
 
-FastAPI app that watches Plex/Jellyfin libraries, evaluates configurable
-rules (never-watched, keep-tags, Seerr requests, file size, age, ratings,
-etc.) against them, and runs ordered action pipelines -- tagging,
-searching, moving, migrating, or deleting items in Radarr and Sonarr.
+Rule-driven lifecycle manager for Plex/Jellyfin libraries. Watches
+your collections, evaluates configurable rules (never-watched,
+keep-tags, Seerr requests, file size, age, ratings, etc.), and runs
+ordered action pipelines in Radarr and Sonarr -- tagging, searching,
+moving to other root folders, migrating between arr instances, or
+deleting.
 
-Previously lived under `stacks/media-collection-manager/` in the
-rinseaid/komodo GitOps repo; split out so the app can evolve on its
-own release cycle. Deployment is still managed by Komodo -- the
-compose + TOML live in the komodo repo, while this repo provides the
-image built from the Dockerfile here.
+Previously lived as "Media Collection Manager" inside the
+rinseaid/komodo GitOps repo. Split into its own repo so it can evolve
+on its own release cycle. Deployment stays in rinseaid/komodo -- the
+compose + TOML live there and reference the image published by the
+GitHub Actions workflow in this repo.
 
 ## Run locally
 
@@ -18,21 +20,29 @@ pip install -r requirements.txt
 uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
 ```
 
-Point a browser at http://localhost:8080. The first run seeds defaults
-from environment variables (see `app/config.py` / `app/database.py`);
-after that SQLite at `/app/data/mcm.db` is the source of truth.
+UI at http://localhost:8080. First run seeds defaults from environment
+variables (see `app/config.py` / `app/database.py`); after that the
+SQLite DB at `/app/data/mcm.db` is the source of truth.
 
 ## Build the image
 
 ```bash
-docker build -t mcm:dev .
+docker build -t jettison:dev .
 ```
 
-## Key integrations
+## Published images
+
+GitHub Actions builds and pushes `ghcr.io/rinseaid/jettison:<tag>` on
+every push to `main`. Tags:
+
+- `latest` -- tip of main
+- `sha-<short>` -- pinned to the exact commit (Renovate-friendly)
+
+## Integrations
 
 - Plex / Jellyfin -- library inventory + watch history
-- Radarr / Sonarr -- metadata, tagging, monitoring, deletes, migrations
-  (multi-instance support: register as many arrs as you want)
+- Radarr / Sonarr -- metadata, tagging, monitoring, deletes,
+  cross-instance migrations (multi-instance support built in)
 - Seerr (Overseerr) -- active-request protection
-- Apprise -- notifications for rule hits + pipeline outcomes
-- Real-Debrid / TorBox -- cache availability checks for download decisions
+- Apprise -- notifications for rule hits and pipeline outcomes
+- Real-Debrid / TorBox -- cache-availability checks
