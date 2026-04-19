@@ -1,6 +1,6 @@
 """Settings management with env-var fallback and SQLite persistence.
 
-Keys cover the media servers Jettison integrates with (Plex + Jellyfin for
+Keys cover the media servers Reclaimer integrates with (Plex + Jellyfin for
 library metadata and watch history), the companion services used for
 rules (Radarr, Sonarr, Overseerr), the debrid providers (TorBox,
 Real-Debrid), notification routing (Apprise), and scheduling. On first

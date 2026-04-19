@@ -4,7 +4,7 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>{% block title %}Jettison{% endblock %}</title>
+    <title>{% block title %}Reclaimer{% endblock %}</title>
     <script>
     // Set the theme before anything renders so there's no flash of the
     // wrong theme on cold load. Stored pref is 'dark' | 'light' | 'auto'
@@ -12,23 +12,21 @@
     // system changes at runtime (see the listener further down).
     (function () {
         try {
-            // One-shot migration for pre-rename clients. Anyone who loaded
-            // this page once will have jettison-theme thereafter; the legacy
-            // key is removed.
-            const legacy = localStorage.getItem('mcm-theme');
-            if (legacy !== null && localStorage.getItem('jettison-theme') === null) {
-                localStorage.setItem('jettison-theme', legacy);
-                localStorage.removeItem('mcm-theme');
-            }
-            // Same migration for per-section collapsed/expanded state.
-            const keys = Object.keys(localStorage);
-            for (const k of keys) {
-                if (k.startsWith('mcm-section-') && localStorage.getItem('jettison-' + k.slice(4)) === null) {
-                    localStorage.setItem('jettison-' + k.slice(4), localStorage.getItem(k));
+            // Forward-migrate localStorage keys through every past brand:
+            // mcm-* -> jettison-* -> reclaimer-*. A single boot under each
+            // brand upgrades the keys; the legacy ones get deleted as we go.
+            const PREFIXES = ['mcm-', 'jettison-'];
+            for (const legacyPrefix of PREFIXES) {
+                for (const k of Object.keys(localStorage)) {
+                    if (!k.startsWith(legacyPrefix)) continue;
+                    const newKey = 'reclaimer-' + k.slice(legacyPrefix.length);
+                    if (localStorage.getItem(newKey) === null) {
+                        localStorage.setItem(newKey, localStorage.getItem(k));
+                    }
                     localStorage.removeItem(k);
                 }
             }
-            const saved = localStorage.getItem('jettison-theme');
+            const saved = localStorage.getItem('reclaimer-theme');
             const pref = (saved === 'dark' || saved === 'light') ? saved : 'auto';
             const resolved = pref === 'auto'
                 ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
@@ -76,10 +74,10 @@
             border-top-color: transparent;
             border-radius: 9999px;
             opacity: 0.8;
-            animation: jettison-spin 0.8s linear infinite;
+            animation: reclaimer-spin 0.8s linear infinite;
         }
         .spinner-sm { @apply w-4 h-4; border-width: 2px; }
-        @keyframes jettison-spin {
+        @keyframes reclaimer-spin {
             to { transform: rotate(360deg); }
         }
 
@@ -149,10 +147,10 @@
            Tooltip utility.
 
            Usage (anywhere in the app):
-               <span class="jettison-tooltip"
+               <span class="reclaimer-tooltip"
                      data-tooltip="Short explanation goes here.">(?)</span>
 
-           The element with `.jettison-tooltip` is the trigger. A pseudo-element
+           The element with `.reclaimer-tooltip` is the trigger. A pseudo-element
            surfaces `data-tooltip` on hover / focus. We use `::after` for the
            bubble and `::before` for the little arrow.
 
@@ -162,11 +160,11 @@
 
            Viewport overflow: by default the bubble opens centered below the
            trigger. The JS helper in collections_list.html and
-           collection_settings.html auto-applies `.jettison-tooltip--left`,
-           `.jettison-tooltip--right`, or `.jettison-tooltip--above` based on where the
+           collection_settings.html auto-applies `.reclaimer-tooltip--left`,
+           `.reclaimer-tooltip--right`, or `.reclaimer-tooltip--above` based on where the
            trigger sits so the bubble never gets clipped.
         ------------------------------------------------------------------ */
-        .jettison-tooltip {
+        .reclaimer-tooltip {
             @apply relative inline-flex items-center justify-center
                    w-4 h-4 rounded-full text-[10px] leading-none
                    font-semibold cursor-help align-middle
@@ -175,7 +173,7 @@
                    focus:outline-none focus:ring-1 focus:ring-indigo-500/50
                    transition-colors;
         }
-        .jettison-tooltip::after {
+        .reclaimer-tooltip::after {
             content: attr(data-tooltip);
             position: absolute;
             top: calc(100% + 8px);
@@ -200,7 +198,7 @@
             z-index: 1000;
             transform: translate(-50%, -3px);
         }
-        .jettison-tooltip::before {
+        .reclaimer-tooltip::before {
             content: "";
             position: absolute;
             top: calc(100% + 2px);
@@ -213,36 +211,36 @@
             transition: opacity 0.12s ease-in;
             z-index: 1001;
         }
-        .jettison-tooltip:hover::after,
-        .jettison-tooltip:focus::after,
-        .jettison-tooltip:focus-within::after,
-        .jettison-tooltip.is-open::after {
+        .reclaimer-tooltip:hover::after,
+        .reclaimer-tooltip:focus::after,
+        .reclaimer-tooltip:focus-within::after,
+        .reclaimer-tooltip.is-open::after {
             opacity: 1;
             transform: translate(-50%, 0);
         }
-        .jettison-tooltip:hover::before,
-        .jettison-tooltip:focus::before,
-        .jettison-tooltip:focus-within::before,
-        .jettison-tooltip.is-open::before {
+        .reclaimer-tooltip:hover::before,
+        .reclaimer-tooltip:focus::before,
+        .reclaimer-tooltip:focus-within::before,
+        .reclaimer-tooltip.is-open::before {
             opacity: 1;
         }
 
         /* Edge clamping: auto-applied by JS when near viewport edges. */
-        .jettison-tooltip--left::after   { left: 0; transform: translate(0, -3px); }
-        .jettison-tooltip--left:hover::after,
-        .jettison-tooltip--left:focus::after,
-        .jettison-tooltip--left:focus-within::after,
-        .jettison-tooltip--left.is-open::after { transform: translate(0, 0); }
+        .reclaimer-tooltip--left::after   { left: 0; transform: translate(0, -3px); }
+        .reclaimer-tooltip--left:hover::after,
+        .reclaimer-tooltip--left:focus::after,
+        .reclaimer-tooltip--left:focus-within::after,
+        .reclaimer-tooltip--left.is-open::after { transform: translate(0, 0); }
 
-        .jettison-tooltip--right::after  { left: auto; right: 0; transform: translate(0, -3px); }
-        .jettison-tooltip--right:hover::after,
-        .jettison-tooltip--right:focus::after,
-        .jettison-tooltip--right:focus-within::after,
-        .jettison-tooltip--right.is-open::after { transform: translate(0, 0); }
+        .reclaimer-tooltip--right::after  { left: auto; right: 0; transform: translate(0, -3px); }
+        .reclaimer-tooltip--right:hover::after,
+        .reclaimer-tooltip--right:focus::after,
+        .reclaimer-tooltip--right:focus-within::after,
+        .reclaimer-tooltip--right.is-open::after { transform: translate(0, 0); }
 
         /* Flip above when near the bottom of the viewport. */
-        .jettison-tooltip--above::after  { top: auto; bottom: calc(100% + 8px); }
-        .jettison-tooltip--above::before {
+        .reclaimer-tooltip--above::after  { top: auto; bottom: calc(100% + 8px); }
+        .reclaimer-tooltip--above::before {
             top: auto;
             bottom: calc(100% + 2px);
             border-bottom-color: transparent;
@@ -306,27 +304,27 @@
         html[data-theme="light"] aside { background-color: #ffffff !important; }
 
         /* Tooltip bubble (custom colours, not Tailwind classes). */
-        html[data-theme="light"] .jettison-tooltip::after {
+        html[data-theme="light"] .reclaimer-tooltip::after {
             background: #ffffff;
             color: #18181b;
             border-color: #d4d4d8;
             box-shadow: 0 6px 20px rgba(0,0,0,0.08);
         }
-        html[data-theme="light"] .jettison-tooltip::before {
+        html[data-theme="light"] .reclaimer-tooltip::before {
             border-bottom-color: #d4d4d8;
         }
-        html[data-theme="light"] .jettison-tooltip--above::before {
+        html[data-theme="light"] .reclaimer-tooltip--above::before {
             border-bottom-color: transparent;
             border-top-color: #d4d4d8;
         }
-        html[data-theme="light"] .jettison-tooltip {
+        html[data-theme="light"] .reclaimer-tooltip {
             color: #52525b;
             background: #f4f4f5;
             border-color: #d4d4d8;
         }
 
         /* Kbd blocks inside modals. */
-        html[data-theme="light"] .jettison-kbd {
+        html[data-theme="light"] .reclaimer-kbd {
             background: #f4f4f5 !important;
             border-color: #d4d4d8 !important;
             color: #3f3f46 !important;
@@ -461,14 +459,14 @@
         html[data-theme-pref="auto"]  .theme-toggle .icon-moon { display: none; }
 
         /* Kbd hint inside modals. */
-        .jettison-kbd {
+        .reclaimer-kbd {
             @apply inline-flex items-center justify-center
                    px-1.5 py-0.5 rounded-sm text-[10px] font-semibold
                    bg-zinc-800 border border-zinc-700 text-zinc-300
                    align-middle leading-none;
             font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
         }
-        .jettison-kbd-hint {
+        .reclaimer-kbd-hint {
             @apply flex items-center justify-center gap-1.5 mt-4
                    text-[11px] text-zinc-500 select-none;
         }
@@ -476,7 +474,7 @@
 </head>
 <body class="grid min-h-screen m-0 p-0 bg-zinc-950 text-zinc-100 md:grid-cols-[220px_1fr] grid-cols-1">
     <aside class="md:sticky md:top-0 md:h-screen md:overflow-y-auto md:border-r md:border-zinc-700 bg-zinc-900 p-4 md:p-4 border-b border-zinc-700 md:border-b-0 md:flex md:flex-col">
-        <div class="text-2xl font-extrabold px-3 pb-5 tracking-wide bg-gradient-to-br from-indigo-500 to-violet-400 bg-clip-text text-transparent hidden md:block">Jettison</div>
+        <div class="text-2xl font-extrabold px-3 pb-5 tracking-wide bg-gradient-to-br from-indigo-500 to-violet-400 bg-clip-text text-transparent hidden md:block">Reclaimer</div>
         <nav class="md:flex-1">
             <ul class="list-none p-0 m-0 flex md:flex-col gap-1 md:gap-0.5">
                 <li><a href="/rules" class="nav-link" {% if request.url.path == '/rules' or request.url.path.startswith('/rules') %}aria-current="page"{% endif %}><svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><rect x="1" y="2" width="18" height="2.5" rx="1"/><rect x="1" y="8.5" width="18" height="2.5" rx="1"/><rect x="1" y="15" width="18" height="2.5" rx="1"/></svg>Rules</a></li>
@@ -497,7 +495,7 @@
         </nav>
         <!-- Theme toggle (bottom-left). -->
         <div class="hidden md:block mt-4 pt-3 border-t border-zinc-700">
-            <button type="button" id="jettison-theme-toggle" class="theme-toggle" aria-label="Cycle theme (dark, light, auto)" title="Click to cycle: dark → light → auto">
+            <button type="button" id="reclaimer-theme-toggle" class="theme-toggle" aria-label="Cycle theme (dark, light, auto)" title="Click to cycle: dark → light → auto">
                 <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
                 </svg>
@@ -536,13 +534,13 @@
             html.setAttribute('data-theme', resolved);
             html.setAttribute('data-theme-pref', pref);
             html.classList.toggle('dark', resolved === 'dark');
-            try { localStorage.setItem('jettison-theme', pref); } catch (_) {}
+            try { localStorage.setItem('reclaimer-theme', pref); } catch (_) {}
         }
         // When pref is 'auto', track system changes at runtime.
         mql.addEventListener('change', () => {
             if (html.getAttribute('data-theme-pref') === 'auto') apply('auto');
         });
-        const btn = document.getElementById('jettison-theme-toggle');
+        const btn = document.getElementById('reclaimer-theme-toggle');
         if (!btn) return;
         const order = ['dark', 'light', 'auto'];
         btn.addEventListener('click', () => {

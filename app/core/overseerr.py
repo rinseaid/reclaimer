@@ -190,7 +190,7 @@ def user_watchlist_tmdb_ids(
 ) -> set[int]:
     """Return the set of TMDB ids currently on the named user's watchlist.
 
-    Used by the Jettison UI to pre-render the +Watchlist toggle's state. Failure
+    Used by the Reclaimer UI to pre-render the +Watchlist toggle's state. Failure
     modes fall through as an empty set; the caller treats "unknown" as "not
     on the watchlist" and the user can still click to add.
     """

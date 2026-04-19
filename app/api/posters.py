@@ -1,7 +1,7 @@
 """Poster proxy + on-disk cache.
 
 Serves scaled thumbnails for items from Plex or Jellyfin via a single
-Jettison-side URL that the browser can cache normally. First hit fetches and
+Reclaimer-side URL that the browser can cache normally. First hit fetches and
 writes to disk; subsequent hits are served straight from the cache.
 """
 from __future__ import annotations

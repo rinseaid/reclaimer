@@ -1,4 +1,4 @@
-# Jettison
+# Reclaimer
 
 Rule-driven lifecycle manager for Plex/Jellyfin libraries. Watches
 your collections, evaluates configurable rules (never-watched,
@@ -20,17 +20,17 @@ uvicorn app.main:app --host 0.0.0.0 --port 8080 --reload
 
 UI at http://localhost:8080. First run seeds defaults from environment
 variables (see `app/config.py` / `app/database.py`); after that the
-SQLite DB at `/app/data/jettison.db` is the source of truth.
+SQLite DB at `/app/data/reclaimer.db` is the source of truth.
 
 ## Build the image
 
 ```bash
-docker build -t jettison:dev .
+docker build -t reclaimer:dev .
 ```
 
 ## Published images
 
-GitHub Actions builds and pushes `ghcr.io/rinseaid/jettison:<tag>` on
+GitHub Actions builds and pushes `ghcr.io/rinseaid/reclaimer:<tag>` on
 every push to `main`. Tags:
 
 - `latest` -- tip of main
