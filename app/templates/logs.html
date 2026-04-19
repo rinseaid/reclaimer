@@ -1,0 +1,611 @@
+{% extends "base.html" %}
+{% from "_macros.html" import spinner %}
+{% block title %}Logs{% endblock %}
+{% block content %}
+<style>
+    /* CSS Grid Table - layout pattern Tailwind utilities can't cleanly express */
+    .gtable { width: 100%; }
+    .gtable-header, .gtable-filter, .gtable-row {
+        display: grid;
+        grid-template-columns: 175px 110px 200px 1fr;
+        gap: 0 0.5rem;
+        padding: 0 4px;
+        align-items: center;
+    }
+    .gtable-header { padding-left: calc(4px + 0.5rem); }
+    .gtable-header > div:first-child { margin-left: -0.5rem; }
+    .gtable-filter { padding-left: calc(4px + 0.5rem); }
+    .gtable-filter > div:first-child { margin-left: -0.5rem; }
+
+    /* Bottom load bar: fixed to viewport, fades page into it. */
+    .load-bar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 10;
+        pointer-events: none;
+        transition: opacity 0.3s;
+    }
+    .load-bar.hidden { opacity: 0; pointer-events: none; }
+    .load-bar-fade {
+        height: 8rem;
+        background: linear-gradient(to bottom, transparent 0%, #09090b 85%);
+    }
+
+    /* Responsive: collapse the "Rule" column on narrow viewports */
+    @media (max-width: 768px) {
+        .gtable-header, .gtable-filter, .gtable-row {
+            grid-template-columns: 100px 90px 1fr;
+        }
+        .gtable-header > div:nth-child(3),
+        .gtable-filter > div:nth-child(3),
+        .gtable-row > div:nth-child(3) { display: none; }
+    }
+</style>
+
+<!-- Flush main so fixed load-bar sits against the viewport edge. -->
+<!-- Targets base.html's <main class="... py-6"> + <footer>; `main-flush` is applied to <body>. -->
+<script>document.body.classList.add('logs-flush');</script>
+<style>
+    body.logs-flush main { padding-bottom: 0; margin-bottom: 0; }
+    body.logs-flush { padding-bottom: 0; margin-bottom: 0; }
+    body.logs-flush footer { display: none; }
+</style>
+
+<div class="mb-2">
+    <h2 id="logs-title" class="text-2xl font-bold text-zinc-100 mb-1">Logs</h2>
+    <p id="logs-subtitle" class="text-sm text-zinc-400 mb-0"></p>
+</div>
+
+<div class="flex items-center gap-3 mb-4 flex-wrap">
+    <div id="rule-filter-bar" class="hidden text-sm items-center gap-2">
+        <span class="inline-flex px-2 py-0.5 rounded-md text-xs font-semibold bg-sky-500/15 text-sky-400" id="rule-filter-badge"></span>
+        <a href="/logs" class="text-sky-400 hover:text-sky-300 text-sm">Clear filter</a>
+    </div>
+    <button id="col-filter-toggle" title="Toggle column filters" onclick="toggleColumnFilters()"
+        class="bg-transparent rounded-md border border-zinc-600 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 px-2 py-1 cursor-pointer text-xs inline-flex items-center gap-1.5 transition-all duration-150">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 1.5h13L10 7.5V13l-4 2V7.5z"/></svg>
+        Filters
+    </button>
+    <button id="clear-logs-btn" title="Clear all logs" onclick="clearLogs()"
+        class="ml-auto bg-transparent rounded-md border border-rose-600/60 text-rose-400 hover:text-rose-300 hover:border-rose-500 px-2 py-1 cursor-pointer text-xs inline-flex items-center gap-1.5 transition-all duration-150">
+        Clear Logs
+    </button>
+</div>
+
+<div id="logs-container">
+    <div class="flex items-center gap-2 text-zinc-400 text-sm py-4">
+        {{ spinner(size='w-4 h-4') }}
+        <span>Loading logs...</span>
+    </div>
+</div>
+<!-- Spacer so fixed load-bar doesn't cover last rows -->
+<div id="load-bar-spacer" class="h-14"></div>
+<div id="load-bar" class="load-bar hidden">
+    <div class="load-bar-fade"></div>
+    <div class="bg-zinc-950 flex items-center justify-center gap-4 px-0 pt-2 pb-4" style="pointer-events: auto;">
+        <span id="load-status" class="text-zinc-400 text-sm"></span>
+        <button id="load-more-btn" onclick="loadMore()"
+            class="bg-transparent rounded-md border border-zinc-600 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 px-3 py-1 cursor-pointer text-xs transition-all duration-150">
+            Load more
+        </button>
+        <button id="load-all-btn" onclick="loadAll()"
+            class="bg-transparent rounded-md border border-zinc-600 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 px-3 py-1 cursor-pointer text-xs transition-all duration-150">
+            Load all
+        </button>
+    </div>
+</div>
+
+<script>
+// Estimate rows to fill viewport + enough extra to make it scrollable.
+// Account for header/toolbar (~200px) and the fixed load-bar (~140px).
+const ROW_HEIGHT = 37;
+const visibleArea = window.innerHeight - 200 - 140;
+const BATCH_SIZE = Math.max(20, Math.ceil(visibleArea / ROW_HEIGHT) + 5);
+let allEvents = [];       // all fetched events so far
+let totalEvents = 0;      // total on server
+let fetchOffset = 0;      // how many we've fetched
+let fetching = false;
+let fullyLoaded = false;
+let columnFiltersVisible = false;
+
+const urlParams = new URLSearchParams(window.location.search);
+const ruleFilter = urlParams.get('rule') || '';
+
+const EVENT_LABELS = {
+    run_started: 'Run Started',
+    run_completed: 'Run Completed',
+    rule_processed: 'Rule Processed',
+    item_added: 'Item Added',
+    item_removed: 'Item Removed',
+    item_override: 'Override Set',
+    item_deleted: 'Item Deleted',
+    item_actioned: 'Item Actioned',
+    item_action_failed: 'Action Failed',
+    collection_sync_failed: 'Sync Failed',
+    collection_sync_summary: 'Sync Summary',
+    run_error: 'Run Error',
+    user_protection: 'User Protection',
+};
+const EVENT_PILL_CLASSES = {
+    run_started:     'bg-indigo-500/15 text-indigo-400',
+    run_completed:   'bg-emerald-500/15 text-emerald-400',
+    rule_processed:  'bg-sky-500/15 text-sky-400',
+    item_added:      'bg-amber-500/15 text-amber-400',
+    item_removed:    'bg-emerald-500/15 text-emerald-400',
+    item_override:   'bg-zinc-500/15 text-zinc-400',
+    item_deleted:    'bg-rose-500/15 text-rose-400',
+    item_actioned:   'bg-rose-500/15 text-rose-400',
+    item_action_failed: 'bg-rose-500/15 text-rose-400',
+    collection_sync_failed: 'bg-rose-500/15 text-rose-400',
+    collection_sync_summary: 'bg-zinc-500/15 text-zinc-400',
+    run_error:       'bg-rose-500/15 text-rose-400',
+    user_protection: 'bg-zinc-500/15 text-zinc-400',
+};
+const DRY_RUN_PILL = 'bg-indigo-500/15 text-indigo-400';
+
+function fmtTime(ts) {
+    if (!ts) return '--';
+    const normalized = (ts.includes('T') ? ts : ts.replace(' ', 'T')) + (ts.includes('Z') || ts.includes('+') ? '' : 'Z');
+    const d = new Date(normalized);
+    if (isNaN(d)) return ts;
+    return d.toLocaleDateString(undefined, { year:'numeric', month:'short', day:'numeric' })
+        + ' ' + d.toLocaleTimeString(undefined, { hour:'2-digit', minute:'2-digit', second:'2-digit' });
+}
+
+function eventPill(type) {
+    const label = EVENT_LABELS[type] || type;
+    const cls = EVENT_PILL_CLASSES[type] || EVENT_PILL_CLASSES.item_override;
+    return '<span class="inline-flex px-2 py-0.5 rounded-md text-xs font-semibold whitespace-nowrap ' + cls + '">' + label + '</span>';
+}
+
+function dryRunPill() {
+    return '<span class="inline-flex px-2 py-0.5 rounded-md text-xs font-semibold whitespace-nowrap ' + DRY_RUN_PILL + '">Dry Run</span>';
+}
+
+function sortArrow(key) {
+    return '<span class="text-xs opacity-60">\u25BC</span>';
+}
+
+// ── Column filters ──
+function toggleColumnFilters() {
+    columnFiltersVisible = !columnFiltersVisible;
+    const row = document.getElementById('logs-filter-row');
+    const btn = document.getElementById('col-filter-toggle');
+    if (row) row.style.display = columnFiltersVisible ? 'grid' : 'none';
+    if (columnFiltersVisible) {
+        btn.classList.add('text-zinc-200', 'border-zinc-500', 'bg-indigo-500/15');
+        btn.classList.remove('text-zinc-400', 'border-zinc-600', 'bg-transparent');
+    } else {
+        btn.classList.remove('text-zinc-200', 'border-zinc-500', 'bg-indigo-500/15');
+        btn.classList.add('text-zinc-400', 'border-zinc-600', 'bg-transparent');
+        document.querySelectorAll('#logs-filter-row .col-filter').forEach(input => { input.value = ''; });
+        applyColumnFilters();
+    }
+}
+
+// Persistent filter state -- survives DOM re-renders
+let savedFilters = ['', '', '', ''];
+let filterDebounce = null;
+
+function applyColumnFilters() {
+    // Save current filter values
+    const inputs = document.querySelectorAll('#logs-filter-row .col-filter');
+    inputs.forEach((input, i) => { savedFilters[i] = input.value; });
+
+    clearTimeout(filterDebounce);
+    const filters = savedFilters.map(f => f.toLowerCase().trim());
+    const hasFilter = filters.some(f => f.length > 0);
+
+    // If filtering and not all loaded, load everything first
+    if (hasFilter && !fullyLoaded) {
+        filterDebounce = setTimeout(() => {
+            loadAll().then(() => {
+                restoreFilterValues();
+                applyColumnFiltersDOM();
+            });
+        }, 300);
+        return;
+    }
+    applyColumnFiltersDOM();
+}
+
+function restoreFilterValues() {
+    const inputs = document.querySelectorAll('#logs-filter-row .col-filter');
+    inputs.forEach((input, i) => { input.value = savedFilters[i] || ''; });
+}
+
+function applyColumnFiltersDOM() {
+    const filters = savedFilters.map(f => f.toLowerCase().trim());
+    document.querySelectorAll('.gtable-row[data-filterable]').forEach(row => {
+        const cells = row.querySelectorAll('[data-col]');
+        let visible = true;
+        cells.forEach(cell => {
+            const idx = parseInt(cell.getAttribute('data-col'));
+            if (filters[idx] && !cell.textContent.toLowerCase().includes(filters[idx])) visible = false;
+        });
+        row.style.display = visible ? '' : 'none';
+    });
+    // Also show/hide run headers based on whether they have visible children
+    document.querySelectorAll('.gtable-row.run-header').forEach(header => {
+        const next = [];
+        let el = header.nextElementSibling;
+        while (el && el.classList.contains('run-child')) {
+            next.push(el);
+            el = el.nextElementSibling;
+        }
+        const anyVisible = next.some(r => r.style.display !== 'none');
+        header.style.display = anyVisible ? '' : 'none';
+    });
+}
+
+// ── Show rule filter bar ──
+if (ruleFilter) {
+    document.getElementById('rule-filter-bar').classList.remove('hidden');
+    document.getElementById('rule-filter-bar').classList.add('flex');
+    document.getElementById('rule-filter-badge').textContent = 'Filtered: ' + ruleFilter;
+    document.getElementById('logs-title').textContent = 'Logs - ' + ruleFilter;
+}
+
+// ── Fetch a batch from the API ──
+async function fetchBatch(offset, limit) {
+    let url = `/api/activity?page=${Math.floor(offset / limit) + 1}&per_page=${limit}`;
+    if (ruleFilter) url += '&collection=' + encodeURIComponent(ruleFilter);
+    const resp = await fetch(url);
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    return resp.json();
+}
+
+// ── Build dry-run time ranges from all fetched events ──
+function buildDryRunRanges(events) {
+    const ranges = [];
+    let pendingEnd = null;
+    for (const a of events) {
+        let d = {};
+        try { d = typeof a.detail === 'string' ? JSON.parse(a.detail || '{}') : (a.detail || {}); } catch(e) {}
+        if (a.event_type === 'run_completed' && d.dry_run) {
+            pendingEnd = a.timestamp;
+        } else if (a.event_type === 'run_started' && d.dry_run && pendingEnd) {
+            ranges.push({ start: a.timestamp, end: pendingEnd });
+            pendingEnd = null;
+        } else if (a.event_type === 'run_started' && !d.dry_run) {
+            pendingEnd = null;
+        }
+    }
+    return ranges;
+}
+
+// ── Render all fetched events ──
+function renderAll() {
+    const container = document.getElementById('logs-container');
+    const events = allEvents;
+
+    document.getElementById('logs-subtitle').textContent =
+        fullyLoaded ? totalEvents + ' events' : events.length + ' of ' + totalEvents + ' events loaded';
+
+    if (events.length === 0) {
+        container.innerHTML = '<div class="text-center py-12 px-4 border-2 border-dashed border-zinc-700 rounded-lg mt-4"><p class="text-zinc-500">No log events recorded yet.</p></div>';
+        return;
+    }
+
+    const dryRunRanges = buildDryRunRanges(events);
+    function isInDryRun(ts) {
+        if (!ts) return false;
+        return dryRunRanges.some(r => ts >= r.start && ts <= r.end);
+    }
+
+    // Identify run groups
+    const runs = [];
+    const usedStarts = new Set();
+    for (let i = 0; i < events.length; i++) {
+        if (events[i].event_type !== 'run_completed') continue;
+        let cd = {};
+        try { cd = typeof events[i].detail === 'string' ? JSON.parse(events[i].detail || '{}') : (events[i].detail || {}); } catch(e) {}
+        for (let j = i + 1; j < events.length; j++) {
+            if (events[j].event_type === 'run_started' && !usedStarts.has(j)) {
+                let bd = {};
+                try { bd = typeof events[j].detail === 'string' ? JSON.parse(events[j].detail || '{}') : (events[j].detail || {}); } catch(e) {}
+                if (!!cd.dry_run === !!bd.dry_run) {
+                    runs.push({ completeIdx: i, startIdx: j, duration: cd.duration, dry_run: cd.dry_run || bd.dry_run, startTs: events[j].timestamp });
+                    usedStarts.add(j);
+                    break;
+                }
+            }
+            if (events[j].event_type === 'run_completed') break;
+        }
+    }
+
+    // Handle orphaned run_completed (no matching run_started loaded yet).
+    const matchedCompleteIdx = new Set(runs.map(r => r.completeIdx));
+    for (let i = 0; i < events.length; i++) {
+        if (events[i].event_type !== 'run_completed' || matchedCompleteIdx.has(i)) continue;
+        let cd = {};
+        try { cd = typeof events[i].detail === 'string' ? JSON.parse(events[i].detail || '{}') : (events[i].detail || {}); } catch(e) {}
+        let endIdx = events.length;
+        for (let j = i + 1; j < events.length; j++) {
+            if (events[j].event_type === 'run_completed' || events[j].event_type === 'run_started') {
+                endIdx = j; break;
+            }
+        }
+        runs.push({ completeIdx: i, startIdx: endIdx, duration: cd.duration, dry_run: cd.dry_run, orphan: true });
+    }
+
+    // item_override events are user-triggered (not part of a scan) and must never be grouped in a run.
+    const isRunChild = (evt) => evt.event_type !== 'item_override';
+
+    // Build member sets and find first child per run
+    const runMemberIdx = new Set();
+    for (const run of runs) {
+        runMemberIdx.add(run.completeIdx);
+        if (!run.orphan) runMemberIdx.add(run.startIdx);
+        for (let k = run.completeIdx + 1; k < run.startIdx; k++) {
+            if (isRunChild(events[k])) runMemberIdx.add(k);
+        }
+    }
+
+    const firstChildIdx = {};
+    for (const run of runs) {
+        let first = run.startIdx;
+        for (let k = run.completeIdx + 1; k < run.startIdx; k++) {
+            if (events[k].event_type !== 'run_completed' && events[k].event_type !== 'run_started' && isRunChild(events[k])) {
+                first = k; break;
+            }
+        }
+        const completeTs = events[run.completeIdx].timestamp;
+        for (let k = run.completeIdx - 1; k >= 0; k--) {
+            if (events[k].timestamp !== completeTs) break;
+            if (events[k].event_type === 'run_completed' || events[k].event_type === 'run_started') continue;
+            if (!isRunChild(events[k])) continue;
+            runMemberIdx.add(k);
+            first = k;
+        }
+        firstChildIdx[run.completeIdx] = first;
+    }
+
+    // Render
+    function renderEventRow(a, indent) {
+        let detail = '';
+        const isDry = isInDryRun(a.timestamp);
+        if (a.detail) {
+            try {
+                const d = typeof a.detail === 'string' ? JSON.parse(a.detail) : a.detail;
+                const parts = [];
+                if (d.items != null) parts.push(d.items + ' items');
+                if (d.candidates != null) parts.push(d.candidates + ' matched');
+                if (d.reason) parts.push(d.reason);
+                if (d.dry_run || isDry) parts.push(dryRunPill());
+                detail = parts.join(' \u00B7 ');
+            } catch(e) { detail = String(a.detail); }
+        } else if (isDry) {
+            detail = dryRunPill();
+        }
+        const ruleText = a.collection || '';
+        const titleText = a.title || '';
+        const titleLink = (a.rating_key && titleText)
+            ? '<a href="/items/' + a.rating_key + '" class="text-sky-400 hover:text-sky-300">' + titleText + '</a>'
+            : titleText;
+        const cls = indent ? 'gtable-row run-child' : 'gtable-row';
+        const indentClass = indent ? ' pl-6' : '';
+        let row = '<div class="' + cls + ' py-2.5 px-1 border-b border-zinc-700 text-sm hover:bg-white/[0.02]' + indentClass + '" role="row" data-filterable>';
+        row += '<div role="cell" data-col="0" class="whitespace-nowrap text-zinc-100">' + fmtTime(a.timestamp) + '</div>';
+        row += '<div role="cell" data-col="1">' + eventPill(a.event_type) + '</div>';
+        const ruleSlug = ruleText ? ruleText.toLowerCase().replace(/ /g, '-') : '';
+        row += '<div role="cell" data-col="2">' + (ruleText ? '<a href="/rules/' + encodeURIComponent(ruleSlug) + '" class="text-sky-400 hover:text-sky-300">' + ruleText + '</a>' : '') + '</div>';
+        const detailParts = [titleLink, detail].filter(Boolean);
+        row += '<div role="cell" data-col="3" class="text-zinc-100">' + (detailParts.length ? detailParts.join(' <span class="text-zinc-500">\u00b7</span> ') : '') + '</div>';
+        row += '</div>';
+        return row;
+    }
+
+    let html = '<div class="gtable" role="table">';
+    html += '<div class="gtable-header font-semibold text-xs text-zinc-400 uppercase tracking-wide pb-2 border-b-2 border-zinc-700 sticky top-0 bg-zinc-950 z-[2]" role="row">';
+    html += '<div role="columnheader" class="cursor-pointer select-none flex items-center gap-1 hover:text-zinc-100">Time ' + sortArrow('time') + '</div>';
+    html += '<div role="columnheader" class="cursor-pointer select-none flex items-center gap-1 hover:text-zinc-100">Event</div>';
+    html += '<div role="columnheader" class="cursor-pointer select-none flex items-center gap-1 hover:text-zinc-100">Rule</div>';
+    html += '<div role="columnheader" class="cursor-default select-none flex items-center gap-1">Detail</div>';
+    html += '</div>';
+
+    html += '<div class="gtable-filter py-1.5 px-1 border-b border-zinc-700 bg-white/[0.015] sticky z-[2]" role="row" id="logs-filter-row" style="display:' + (columnFiltersVisible ? 'grid' : 'none') + '; top: 2rem;">';
+    for (let i = 0; i < 4; i++) {
+        html += '<div><input type="text" class="col-filter m-0 py-1 px-1.5 text-xs border border-zinc-700 rounded bg-transparent text-zinc-100 w-full outline-none focus:border-indigo-500" data-col="' + i + '" placeholder="Filter..." oninput="applyColumnFilters()" style="height:auto; line-height:1.2;"></div>';
+    }
+    html += '</div>';
+
+    const emittedRuns = new Set();
+
+    for (let idx = 0; idx < events.length; idx++) {
+        const a = events[idx];
+
+        // Emit run header before first child
+        const runForFirst = runs.find(r => firstChildIdx[r.completeIdx] === idx);
+        if (runForFirst && !emittedRuns.has(runForFirst.completeIdx)) {
+            emittedRuns.add(runForFirst.completeIdx);
+            const prefix = runForFirst.dry_run ? 'Dry run' : 'Run';
+            const durStr = runForFirst.duration != null ? ' (' + Math.round(runForFirst.duration) + 's)' : '';
+            const startTime = runForFirst.startTs ? fmtTime(runForFirst.startTs) : '';
+            const endTime = fmtTime(events[runForFirst.completeIdx].timestamp || '');
+            const timeRange = startTime ? startTime + ' to ' + endTime : endTime;
+            html += '<div class="run-header mt-6 mb-1 flex items-baseline gap-3 text-zinc-400 text-xs" role="row" data-filterable>';
+            html += '<span class="font-semibold text-zinc-300 text-sm">' + prefix + '</span>';
+            html += '<span class="text-zinc-500">' + timeRange + durStr + '</span>';
+            html += '</div>';
+        }
+
+        // Skip run_started/completed (replaced by header)
+        if (a.event_type === 'run_started' || a.event_type === 'run_completed') {
+            if (a.event_type === 'run_completed' && !runs.find(r => r.completeIdx === idx)) {
+                html += renderEventRow(a, false);
+            }
+            continue;
+        }
+
+        html += renderEventRow(a, runMemberIdx.has(idx));
+    }
+    html += '</div>';
+    container.innerHTML = html;
+
+    // Restore filter values after DOM rebuild
+    restoreFilterValues();
+
+    updateLoadZone();
+}
+
+// ── Load bar UI ──
+function updateLoadZone() {
+    const bar = document.getElementById('load-bar');
+    const status = document.getElementById('load-status');
+    const moreBtn = document.getElementById('load-more-btn');
+    const allBtn = document.getElementById('load-all-btn');
+
+    const spacer = document.getElementById('load-bar-spacer');
+    if (fullyLoaded || allEvents.length >= totalEvents) {
+        fullyLoaded = true;
+        bar.classList.add('hidden');
+        spacer.style.display = 'none';
+        return;
+    }
+
+    bar.classList.remove('hidden');
+    spacer.style.display = '';
+    const remaining = totalEvents - allEvents.length;
+    status.textContent = allEvents.length + ' of ' + totalEvents + ' loaded';
+    moreBtn.disabled = false;
+    moreBtn.textContent = 'Load more (' + Math.min(100, remaining) + ')';
+    allBtn.disabled = false;
+    allBtn.textContent = 'Load all (' + remaining + ')';
+}
+
+// ── Spinner markup for buttons ──
+const BTN_SPINNER = '<span class="spinner spinner-sm mr-1 align-middle"></span>';
+
+// ── Fetch next batch and re-render ──
+async function loadMore() {
+    if (fetching || fullyLoaded) return;
+    fetching = true;
+    const moreBtn = document.getElementById('load-more-btn');
+    const origText = moreBtn.textContent;
+    moreBtn.innerHTML = BTN_SPINNER + 'Loading...';
+    moreBtn.disabled = true;
+
+    try {
+        const data = await fetchBatch(fetchOffset, 100);
+        totalEvents = data.total;
+        if (data.activity.length > 0) {
+            allEvents = allEvents.concat(data.activity);
+            fetchOffset += data.activity.length;
+        }
+        if (fetchOffset >= totalEvents || data.activity.length < BATCH_SIZE) {
+            fullyLoaded = true;
+        }
+        renderAll();
+    } catch (err) {
+        document.getElementById('load-status').textContent = 'Error: ' + err.message;
+        moreBtn.textContent = origText;
+    } finally {
+        fetching = false;
+        moreBtn.disabled = false;
+    }
+}
+
+// ── Load everything ──
+async function loadAll() {
+    if (fetching || fullyLoaded) return;
+    fetching = true;
+    const allBtn = document.getElementById('load-all-btn');
+    const origText = allBtn.textContent;
+    allBtn.innerHTML = BTN_SPINNER + 'Loading...';
+    allBtn.disabled = true;
+    document.getElementById('load-status').textContent = 'Loading all events...';
+
+    try {
+        while (!fullyLoaded) {
+            const data = await fetchBatch(fetchOffset, 200);
+            totalEvents = data.total;
+            if (data.activity.length > 0) {
+                allEvents = allEvents.concat(data.activity);
+                fetchOffset += data.activity.length;
+                document.getElementById('load-status').textContent = 'Loading... ' + allEvents.length + ' of ' + totalEvents;
+            }
+            if (fetchOffset >= totalEvents || data.activity.length === 0) {
+                fullyLoaded = true;
+            }
+        }
+        renderAll();
+    } catch (err) {
+        document.getElementById('load-status').textContent = 'Error: ' + err.message;
+        allBtn.textContent = origText;
+    } finally {
+        fetching = false;
+        allBtn.disabled = false;
+    }
+}
+
+// ── Scroll-to-load ──
+let scrollCooldown = false;
+window.addEventListener('scroll', () => {
+    if (fetching || fullyLoaded || scrollCooldown) return;
+    const distFromBottom = document.documentElement.scrollHeight - window.scrollY - window.innerHeight;
+    if (distFromBottom < 300) {
+        scrollCooldown = true;
+        loadMore().finally(() => {
+            setTimeout(() => { scrollCooldown = false; }, 500);
+        });
+    }
+});
+
+// ── Clear logs ──
+function clearLogs() {
+    if (!confirm('Clear all log entries? This cannot be undone.')) return;
+    const btn = document.getElementById('clear-logs-btn');
+    btn.disabled = true;
+    btn.textContent = 'Clearing...';
+    fetch('/api/activity', { method: 'DELETE' })
+        .then(r => r.json())
+        .then(() => {
+            btn.textContent = 'Clear Logs';
+            btn.disabled = false;
+            allEvents = [];
+            totalEvents = 0;
+            fetchOffset = 0;
+            fullyLoaded = false;
+            renderAll();
+        })
+        .catch(() => {
+            btn.textContent = 'Clear Logs';
+            btn.disabled = false;
+        });
+}
+
+// ── Initial load ──
+(async function() {
+    try {
+        const data = await fetchBatch(0, BATCH_SIZE);
+        totalEvents = data.total;
+        allEvents = data.activity || [];
+        fetchOffset = allEvents.length;
+        if (fetchOffset >= totalEvents) fullyLoaded = true;
+        renderAll();
+
+        // If content doesn't fill the viewport, keep loading until it does
+        let fills = 0;
+        while (!fullyLoaded && fills < 5 &&
+               document.documentElement.scrollHeight <= window.innerHeight + 100) {
+            fills++;
+            const more = await fetchBatch(fetchOffset, BATCH_SIZE);
+            totalEvents = more.total;
+            if (more.activity.length > 0) {
+                allEvents = allEvents.concat(more.activity);
+                fetchOffset += more.activity.length;
+            }
+            if (fetchOffset >= totalEvents || more.activity.length < BATCH_SIZE) {
+                fullyLoaded = true;
+            }
+            renderAll();
+        }
+    } catch (err) {
+        document.getElementById('logs-container').innerHTML = '<p class="text-rose-400">Error: ' + err.message + '</p>';
+    }
+})();
+</script>
+{% endblock %}

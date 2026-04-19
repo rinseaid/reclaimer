@@ -1,0 +1,445 @@
+{% extends "base.html" %}
+{% block title %}Settings - Downloaders{% endblock %}
+{% block content %}
+<style>
+    @keyframes toast-in {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes toast-out {
+        from { opacity: 1; transform: translateY(0); }
+        to { opacity: 0; transform: translateY(10px); }
+    }
+</style>
+
+<div class="mb-6">
+    <h2 class="text-2xl font-bold text-zinc-100">Downloaders</h2>
+    <p class="text-sm text-zinc-400 mt-1">Radarr and Sonarr instances &middot; Seerr connection</p>
+</div>
+
+<!-- Instances -->
+<div class="bg-zinc-900 rounded-lg p-6 border border-zinc-800 mb-6">
+    <div class="flex items-center justify-between mb-4">
+        <div>
+            <h3 class="text-lg font-semibold text-zinc-100">Radarr / Sonarr instances</h3>
+            <p class="text-sm text-zinc-400 mt-1">Add as many instances as you need (e.g. HD + 4K, local + cloud).
+                The <span class="text-indigo-400 font-medium">default</span> of each kind is used by rules that don't target a specific instance.</p>
+        </div>
+        <div class="flex gap-2">
+            <button type="button" id="add-radarr-btn"
+                    class="rounded-md px-3 py-1.5 text-sm font-medium bg-indigo-500 hover:bg-indigo-400 text-white">+ Add Radarr</button>
+            <button type="button" id="add-sonarr-btn"
+                    class="rounded-md px-3 py-1.5 text-sm font-medium bg-indigo-500 hover:bg-indigo-400 text-white">+ Add Sonarr</button>
+        </div>
+    </div>
+    <div id="instances-list" class="flex flex-col gap-3">
+        <p class="text-sm text-zinc-500" id="instances-loading">Loading instances…</p>
+    </div>
+</div>
+
+<!-- Seerr (still a single global connection; moves to instances later if needed) -->
+<form id="settings-form">
+<div class="bg-zinc-900 rounded-lg p-6 border border-zinc-800 mb-6">
+    <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold text-zinc-100">Seerr</h3>
+        <span class="text-sm font-normal text-zinc-400" id="status-overseerr"></span>
+    </div>
+    <div class="mb-4">
+        <label class="block text-sm font-medium text-zinc-300 mb-1">URL</label>
+        <input type="text" name="overseerr_url" placeholder="http://seerr:5055"
+               class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+        <p class="text-xs text-zinc-500 mt-1">Base URL for your Seerr instance. MCM checks for active requests here so it doesn't remove content that someone has specifically asked for.</p>
+    </div>
+    <div class="mb-4">
+        <label class="block text-sm font-medium text-zinc-300 mb-1">Public URL</label>
+        <input type="text" name="overseerr_public_url" placeholder="https://seerr.example.com"
+               class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+        <p class="text-xs text-zinc-500 mt-1">Public URL for browser links. Leave blank to use the API URL.</p>
+    </div>
+    <div class="mb-4">
+        <label class="block text-sm font-medium text-zinc-300 mb-1">API Key</label>
+        <input type="password" name="overseerr_api_key" placeholder="(unchanged)"
+               class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+        <p class="text-xs text-zinc-500 mt-1">Your Seerr API key. Find it in Settings &gt; General &gt; API Key. Leave empty to keep the current saved key.</p>
+    </div>
+    <button type="button" onclick="testConnection('overseerr')"
+            class="rounded-md px-3 py-1.5 text-sm font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent">Test Connection</button>
+</div>
+
+<!-- Sticky save bar -->
+<div class="sticky bottom-0 bg-zinc-950 py-4 border-t border-zinc-800 mt-6 flex justify-end gap-3">
+    <button type="submit" id="save-btn"
+            class="rounded-md px-3 py-1.5 text-sm font-medium bg-indigo-500 hover:bg-indigo-400 text-white">Save Seerr Settings</button>
+</div>
+</form>
+
+<!-- Edit/create modal -->
+<div id="instance-modal" class="fixed inset-0 bg-black/60 z-[9998] hidden items-center justify-center">
+    <div class="bg-zinc-900 rounded-lg border border-zinc-700 p-6 w-full max-w-lg shadow-xl">
+        <h3 class="text-lg font-semibold text-zinc-100 mb-4" id="modal-title">Add Instance</h3>
+        <input type="hidden" id="modal-id" value="">
+        <input type="hidden" id="modal-kind" value="">
+        <div class="mb-3">
+            <label class="block text-sm font-medium text-zinc-300 mb-1">Name</label>
+            <input type="text" id="modal-name" placeholder="e.g. Radarr HD"
+                   class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+            <p class="text-xs text-zinc-500 mt-1">Display name used to pick this instance in rules. Must be unique.</p>
+        </div>
+        <div class="mb-3">
+            <label class="block text-sm font-medium text-zinc-300 mb-1">URL</label>
+            <input type="text" id="modal-url" placeholder="http://radarr:7878"
+                   class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+        </div>
+        <div class="mb-3">
+            <label class="block text-sm font-medium text-zinc-300 mb-1">Public URL <span class="text-zinc-500 font-normal">(optional)</span></label>
+            <input type="text" id="modal-public-url" placeholder="https://radarr.example.com"
+                   class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+            <p class="text-xs text-zinc-500 mt-1">Used for browser links (item detail page). Leave blank to reuse the API URL.</p>
+        </div>
+        <div class="mb-3">
+            <label class="block text-sm font-medium text-zinc-300 mb-1">API Key</label>
+            <input type="password" id="modal-api-key" placeholder="(unchanged)"
+                   class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+            <p class="text-xs text-zinc-500 mt-1">Leave blank when editing to keep the saved key.</p>
+        </div>
+        <div class="mb-4 flex items-center gap-2">
+            <input type="checkbox" id="modal-is-default"
+                   class="rounded border-zinc-700 bg-zinc-800 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-zinc-900">
+            <label for="modal-is-default" class="text-sm text-zinc-300">Use as default for this kind</label>
+        </div>
+        <div class="mb-4">
+            <button type="button" id="modal-test-btn"
+                    class="rounded-md px-3 py-1.5 text-sm font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent">Test Connection</button>
+            <span class="text-sm ml-3" id="modal-test-status"></span>
+        </div>
+        <div class="flex justify-end gap-2">
+            <button type="button" id="modal-cancel"
+                    class="rounded-md px-3 py-1.5 text-sm font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent">Cancel</button>
+            <button type="button" id="modal-save"
+                    class="rounded-md px-3 py-1.5 text-sm font-medium bg-indigo-500 hover:bg-indigo-400 text-white">Save</button>
+        </div>
+    </div>
+</div>
+
+<!-- Toast container -->
+<div class="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2" id="toast-container"></div>
+
+<script>
+(function() {
+    const SENSITIVE_PLACEHOLDER = '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022';
+    const sensitiveKeys = new Set();
+
+    function toast(msg, type) {
+        const container = document.getElementById('toast-container');
+        const el = document.createElement('div');
+        const bg = type === 'success' ? 'bg-emerald-600' : 'bg-rose-600';
+        el.className = `${bg} text-white text-sm font-medium px-5 py-3 rounded-md shadow-lg max-w-sm`;
+        el.style.animation = 'toast-in 0.25s ease-out';
+        el.textContent = msg;
+        container.appendChild(el);
+        setTimeout(() => {
+            el.style.animation = 'toast-out 0.25s ease-in forwards';
+            setTimeout(() => el.remove(), 250);
+        }, 3000);
+    }
+
+    // --- Instances manager ---
+    function escapeHtml(s) {
+        return String(s == null ? '' : s).replace(/[&<>"']/g, c => ({
+            '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+        }[c]));
+    }
+
+    function renderInstances(instances) {
+        const container = document.getElementById('instances-list');
+        if (!instances.length) {
+            container.innerHTML = '<p class="text-sm text-zinc-500">No instances configured yet. Add one to get started.</p>';
+            return;
+        }
+        // Group by kind so users see all Radarrs together, then all Sonarrs.
+        const byKind = {radarr: [], sonarr: []};
+        instances.forEach(i => { (byKind[i.kind] || (byKind[i.kind] = [])).push(i); });
+        const parts = [];
+        ['radarr', 'sonarr'].forEach(kind => {
+            const rows = byKind[kind] || [];
+            if (!rows.length) return;
+            parts.push(`<div class="text-xs uppercase tracking-wide text-zinc-500 mt-2">${kind}</div>`);
+            rows.forEach(inst => {
+                const badge = inst.is_default
+                    ? '<span class="ml-2 inline-block rounded px-1.5 py-0.5 text-xs font-medium bg-indigo-500/20 text-indigo-300 border border-indigo-500/30">default</span>'
+                    : '';
+                parts.push(`
+                    <div class="bg-zinc-950 rounded-md border border-zinc-800 p-3 flex items-center justify-between" data-id="${inst.id}">
+                        <div class="min-w-0">
+                            <div class="flex items-center">
+                                <span class="font-medium text-zinc-100">${escapeHtml(inst.name)}</span>
+                                ${badge}
+                            </div>
+                            <div class="text-xs text-zinc-400 mt-0.5 truncate">${escapeHtml(inst.url)}</div>
+                        </div>
+                        <div class="flex gap-2 shrink-0 ml-4">
+                            <button type="button" class="inst-edit rounded-md px-2 py-1 text-xs font-medium border border-zinc-700 hover:border-zinc-500 text-zinc-300" data-id="${inst.id}">Edit</button>
+                            <button type="button" class="inst-delete rounded-md px-2 py-1 text-xs font-medium border border-rose-900 hover:border-rose-700 text-rose-300" data-id="${inst.id}" data-name="${escapeHtml(inst.name)}">Delete</button>
+                        </div>
+                    </div>
+                `);
+            });
+        });
+        container.innerHTML = parts.join('');
+        container.querySelectorAll('.inst-edit').forEach(btn => {
+            btn.addEventListener('click', () => openModalForEdit(Number(btn.dataset.id)));
+        });
+        container.querySelectorAll('.inst-delete').forEach(btn => {
+            btn.addEventListener('click', () => deleteInstance(Number(btn.dataset.id), btn.dataset.name));
+        });
+    }
+
+    let _cachedInstances = [];
+
+    function loadInstances() {
+        return fetch('/api/instances')
+            .then(r => r.json())
+            .then(data => {
+                _cachedInstances = (data.instances || []);
+                renderInstances(_cachedInstances);
+            })
+            .catch(err => {
+                document.getElementById('instances-list').innerHTML =
+                    '<p class="text-sm text-rose-400">Failed to load instances: ' + escapeHtml(err.message) + '</p>';
+            });
+    }
+
+    function openModalForCreate(kind) {
+        document.getElementById('modal-title').textContent = `Add ${kind === 'radarr' ? 'Radarr' : 'Sonarr'}`;
+        document.getElementById('modal-id').value = '';
+        document.getElementById('modal-kind').value = kind;
+        document.getElementById('modal-name').value = '';
+        document.getElementById('modal-url').value = '';
+        document.getElementById('modal-public-url').value = '';
+        document.getElementById('modal-api-key').value = '';
+        document.getElementById('modal-api-key').placeholder = '';
+        document.getElementById('modal-is-default').checked = !_cachedInstances.some(i => i.kind === kind && i.is_default);
+        document.getElementById('modal-test-status').innerHTML = '';
+        document.getElementById('instance-modal').classList.remove('hidden');
+        document.getElementById('instance-modal').classList.add('flex');
+    }
+
+    function openModalForEdit(id) {
+        const inst = _cachedInstances.find(i => i.id === id);
+        if (!inst) return;
+        document.getElementById('modal-title').textContent =
+            `Edit ${inst.kind === 'radarr' ? 'Radarr' : 'Sonarr'} instance`;
+        document.getElementById('modal-id').value = String(inst.id);
+        document.getElementById('modal-kind').value = inst.kind;
+        document.getElementById('modal-name').value = inst.name;
+        document.getElementById('modal-url').value = inst.url;
+        document.getElementById('modal-public-url').value = inst.public_url || '';
+        document.getElementById('modal-api-key').value = '';
+        document.getElementById('modal-api-key').placeholder = '(unchanged - leave blank to keep current)';
+        document.getElementById('modal-is-default').checked = !!inst.is_default;
+        document.getElementById('modal-test-status').innerHTML = '';
+        document.getElementById('instance-modal').classList.remove('hidden');
+        document.getElementById('instance-modal').classList.add('flex');
+    }
+
+    function closeModal() {
+        document.getElementById('instance-modal').classList.add('hidden');
+        document.getElementById('instance-modal').classList.remove('flex');
+    }
+
+    function modalTest() {
+        const statusEl = document.getElementById('modal-test-status');
+        statusEl.innerHTML = '<span class="text-zinc-400">Testing...</span>';
+        const payload = {
+            kind: document.getElementById('modal-kind').value,
+            url: document.getElementById('modal-url').value,
+            api_key: document.getElementById('modal-api-key').value,
+        };
+        const existingId = document.getElementById('modal-id').value;
+        if (existingId) payload.instance_id = Number(existingId);
+        fetch('/api/instances/test', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) {
+                statusEl.innerHTML = '<span class="text-emerald-400">' + escapeHtml(data.detail || 'Connected') + '</span>';
+            } else {
+                statusEl.innerHTML = '<span class="text-rose-400">Failed: ' + escapeHtml(data.detail || 'Unknown') + '</span>';
+            }
+        })
+        .catch(() => {
+            statusEl.innerHTML = '<span class="text-rose-400">Request failed</span>';
+        });
+    }
+
+    function modalSave() {
+        const id = document.getElementById('modal-id').value;
+        const kind = document.getElementById('modal-kind').value;
+        const name = document.getElementById('modal-name').value.trim();
+        const url = document.getElementById('modal-url').value.trim();
+        const publicUrl = document.getElementById('modal-public-url').value.trim();
+        const apiKey = document.getElementById('modal-api-key').value.trim();
+        const isDefault = document.getElementById('modal-is-default').checked;
+
+        if (!name || !url) {
+            toast('Name and URL are required', 'error');
+            return;
+        }
+        if (!id && !apiKey) {
+            toast('API key is required when adding an instance', 'error');
+            return;
+        }
+
+        const btn = document.getElementById('modal-save');
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+
+        let req;
+        if (id) {
+            const body = {name, url, public_url: publicUrl, is_default: isDefault};
+            if (apiKey) body.api_key = apiKey;
+            req = fetch(`/api/instances/${id}`, {
+                method: 'PATCH',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(body),
+            });
+        } else {
+            req = fetch('/api/instances', {
+                method: 'POST',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify({
+                    kind, name, url, public_url: publicUrl,
+                    api_key: apiKey, is_default: isDefault,
+                }),
+            });
+        }
+        req.then(r => {
+            if (!r.ok) return r.json().then(d => Promise.reject(new Error(d.detail || 'Server error')));
+            return r.json();
+        })
+        .then(() => {
+            toast(id ? 'Instance updated' : 'Instance added', 'success');
+            closeModal();
+            return loadInstances();
+        })
+        .catch(err => toast('Save failed: ' + err.message, 'error'))
+        .finally(() => {
+            btn.disabled = false;
+            btn.textContent = 'Save';
+        });
+    }
+
+    function deleteInstance(id, name) {
+        if (!confirm(`Delete instance "${name}"? This cannot be undone.`)) return;
+        fetch(`/api/instances/${id}`, {method: 'DELETE'})
+            .then(r => {
+                if (!r.ok) return r.json().then(d => Promise.reject(new Error(d.detail || 'Server error')));
+                return r.json();
+            })
+            .then(() => {
+                toast('Instance deleted', 'success');
+                return loadInstances();
+            })
+            .catch(err => toast('Delete failed: ' + err.message, 'error'));
+    }
+
+    document.getElementById('add-radarr-btn').addEventListener('click', () => openModalForCreate('radarr'));
+    document.getElementById('add-sonarr-btn').addEventListener('click', () => openModalForCreate('sonarr'));
+    document.getElementById('modal-cancel').addEventListener('click', closeModal);
+    document.getElementById('modal-save').addEventListener('click', modalSave);
+    document.getElementById('modal-test-btn').addEventListener('click', modalTest);
+    document.getElementById('instance-modal').addEventListener('click', (e) => {
+        if (e.target.id === 'instance-modal') closeModal();
+    });
+
+    // --- Seerr settings (kept on the legacy key/value settings API) ---
+    function populateForm(settings) {
+        for (const [key, val] of Object.entries(settings)) {
+            const el = document.querySelector(`[name="${key}"]`);
+            if (!el) continue;
+            if (val === SENSITIVE_PLACEHOLDER) {
+                sensitiveKeys.add(key);
+                el.value = '';
+                el.placeholder = '(unchanged - leave blank to keep current)';
+                continue;
+            }
+            el.value = val ?? '';
+        }
+    }
+
+    document.getElementById('settings-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const updates = {};
+        const allKeys = ['overseerr_url', 'overseerr_public_url', 'overseerr_api_key'];
+        for (const key of allKeys) {
+            if (sensitiveKeys.has(key)) {
+                const val = formData.get(key);
+                if (val && val.trim() !== '') updates[key] = val;
+            } else {
+                updates[key] = formData.get(key) ?? '';
+            }
+        }
+        const btn = document.getElementById('save-btn');
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+        btn.classList.add('opacity-50', 'cursor-not-allowed');
+        fetch('/api/settings', {
+            method: 'PUT',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({settings: updates}),
+        })
+        .then(r => {
+            if (!r.ok) throw new Error('Server returned ' + r.status);
+            return r.json();
+        })
+        .then(data => {
+            const count = (data.updated || []).length;
+            toast('Settings saved (' + count + ' fields updated)', 'success');
+        })
+        .catch(err => toast('Failed to save: ' + err.message, 'error'))
+        .finally(() => {
+            btn.disabled = false;
+            btn.textContent = 'Save Seerr Settings';
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        });
+    });
+
+    window.testConnection = function(service) {
+        const statusEl = document.getElementById('status-' + service);
+        statusEl.innerHTML = '<span class="text-zinc-400">Testing...</span>';
+        const payload = {service};
+        const urlInput = document.querySelector(`[name="${service}_url"]`);
+        const keyInput = document.querySelector(`[name="${service}_api_key"]`);
+        if (urlInput && urlInput.value) payload.url = urlInput.value;
+        if (keyInput && keyInput.value) payload.api_key = keyInput.value;
+        fetch('/api/settings/test-connection', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(payload),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) {
+                statusEl.innerHTML = '<span class="text-emerald-400">' + (data.detail || 'Connected') + '</span>';
+            } else {
+                statusEl.innerHTML = '<span class="text-rose-400">Failed: ' + (data.error || 'Unknown') + '</span>';
+            }
+        })
+        .catch(() => {
+            statusEl.innerHTML = '<span class="text-rose-400">Request failed</span>';
+        });
+    };
+
+    fetch('/api/settings')
+        .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
+        .then(settings => populateForm(settings))
+        .catch(err => toast('Failed to load settings: ' + err.message, 'error'));
+
+    loadInstances();
+})();
+</script>
+{% endblock %}

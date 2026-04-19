@@ -1,0 +1,545 @@
+{# Reusable macros live in _macros.html; import via {% from "_macros.html" import spinner, empty_state %} #}
+<!DOCTYPE html>
+<html lang="en" class="dark" data-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{% block title %}MCM{% endblock %} - Media Collection Manager</title>
+    <script>
+    // Set the theme before anything renders so there's no flash of the
+    // wrong theme on cold load. Stored pref is 'dark' | 'light' | 'auto'
+    // (default: auto). 'auto' resolves via prefers-color-scheme and follows
+    // system changes at runtime (see the listener further down).
+    (function () {
+        try {
+            const saved = localStorage.getItem('mcm-theme');
+            const pref = (saved === 'dark' || saved === 'light') ? saved : 'auto';
+            const resolved = pref === 'auto'
+                ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+                : pref;
+            const html = document.documentElement;
+            html.setAttribute('data-theme', resolved);
+            html.setAttribute('data-theme-pref', pref);
+            html.classList.toggle('dark', resolved === 'dark');
+        } catch (_) {}
+    })();
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+    tailwindcss.config = {
+        darkMode: 'class',
+        theme: {
+            extend: {
+                colors: {
+                    accent: '#6366f1',
+                }
+            }
+        }
+    }
+    </script>
+    <style type="text/tailwindcss">
+        /* Rule status */
+        .rule-pass { @apply text-emerald-500; }
+        .rule-fail { @apply text-rose-500; }
+
+        /* Tabular numbers for sizes */
+        .size { font-variant-numeric: tabular-nums; }
+
+        /* Status badges - standardized: inline-flex px-2 py-0.5 rounded-md text-xs font-semibold */
+        .badge { @apply inline-flex px-2 py-0.5 rounded-md text-xs font-semibold; }
+        .badge-success { @apply bg-emerald-500/15 text-emerald-500; }
+        .badge-danger { @apply bg-rose-500/15 text-rose-500; }
+        .badge-warning { @apply bg-amber-500/15 text-amber-500; }
+        .badge-muted { @apply bg-zinc-500/15 text-zinc-400; }
+        .badge-info { @apply bg-indigo-500/15 text-indigo-400; }
+
+        /* Inline spinner for JS-generated content: <span class="spinner"></span> */
+        .spinner {
+            @apply inline-block w-5 h-5 shrink-0 align-middle;
+            border: 3px solid currentColor;
+            border-top-color: transparent;
+            border-radius: 9999px;
+            opacity: 0.8;
+            animation: mcm-spin 0.8s linear infinite;
+        }
+        .spinner-sm { @apply w-4 h-4; border-width: 2px; }
+        @keyframes mcm-spin {
+            to { transform: rotate(360deg); }
+        }
+
+        /* Chip input styles */
+        .chip-input {
+            @apply flex flex-wrap items-center gap-1.5 min-h-[2.5rem] px-2 py-1.5
+                   bg-zinc-800 border border-zinc-700 rounded-sm
+                   focus-within:border-indigo-500 focus-within:ring-1 focus-within:ring-indigo-500/50
+                   transition-colors cursor-text;
+        }
+        .chip-input input {
+            @apply bg-transparent border-none outline-none text-zinc-100 text-sm flex-1 min-w-[80px] p-0;
+        }
+        .chip {
+            @apply inline-flex items-center gap-1 px-2 py-0.5 rounded-md
+                   bg-indigo-500/15 text-indigo-300 text-xs font-medium;
+        }
+        .chip-remove {
+            @apply ml-0.5 text-indigo-400 hover:text-indigo-200 cursor-pointer
+                   leading-none text-sm font-bold;
+        }
+        .chip-suggestions {
+            @apply absolute z-50 mt-1 w-full max-h-48 overflow-y-auto
+                   bg-zinc-800 border border-zinc-700 rounded-md shadow-lg;
+        }
+        .chip-suggestion {
+            @apply px-3 py-1.5 text-sm text-zinc-300 cursor-pointer
+                   hover:bg-zinc-700 hover:text-zinc-100 transition-colors;
+        }
+
+        /* Pagination */
+        .pagination { @apply flex gap-2 justify-center items-center mt-4; }
+        .pagination button { @apply min-w-[70px] px-3 py-1 text-sm; }
+
+        /* Smooth transitions for nav links */
+        .nav-link {
+            @apply flex items-center gap-2 px-3 py-2 rounded-md text-sm
+                   text-zinc-400 border-l-[3px] border-transparent
+                   transition-all duration-150
+                   hover:bg-indigo-500/10 hover:text-zinc-100;
+        }
+        .nav-link[aria-current="page"] {
+            @apply border-l-indigo-500 bg-indigo-500/10 text-zinc-100 font-semibold;
+        }
+        .nav-link .nav-icon {
+            @apply w-5 h-5 shrink-0;
+        }
+
+        .nav-sub .nav-link {
+            @apply text-[0.8rem] py-1.5 px-3;
+        }
+        .nav-sub .nav-link .nav-icon {
+            @apply w-4 h-4;
+        }
+
+        /* Mobile nav adjustments */
+        @media (max-width: 768px) {
+            .nav-link {
+                @apply border-l-0 border-b-[3px] border-transparent px-2.5 py-1.5;
+            }
+            .nav-link[aria-current="page"] {
+                @apply border-l-transparent border-b-indigo-500;
+            }
+        }
+
+        /* ------------------------------------------------------------------
+           Tooltip utility.
+
+           Usage (anywhere in the app):
+               <span class="mcm-tooltip"
+                     data-tooltip="Short explanation goes here.">(?)</span>
+
+           The element with `.mcm-tooltip` is the trigger. A pseudo-element
+           surfaces `data-tooltip` on hover / focus. We use `::after` for the
+           bubble and `::before` for the little arrow.
+
+           Keyboard / touch: we also show on `:focus-within`, so a real
+           <button> inside the trigger gets keyboard activation for free.
+           Taps on touch devices also activate `:focus`.
+
+           Viewport overflow: by default the bubble opens centered below the
+           trigger. The JS helper in collections_list.html and
+           collection_settings.html auto-applies `.mcm-tooltip--left`,
+           `.mcm-tooltip--right`, or `.mcm-tooltip--above` based on where the
+           trigger sits so the bubble never gets clipped.
+        ------------------------------------------------------------------ */
+        .mcm-tooltip {
+            @apply relative inline-flex items-center justify-center
+                   w-4 h-4 rounded-full text-[10px] leading-none
+                   font-semibold cursor-help align-middle
+                   text-zinc-400 bg-zinc-800 border border-zinc-700
+                   hover:text-zinc-100 hover:border-zinc-500
+                   focus:outline-none focus:ring-1 focus:ring-indigo-500/50
+                   transition-colors;
+        }
+        .mcm-tooltip::after {
+            content: attr(data-tooltip);
+            position: absolute;
+            top: calc(100% + 8px);
+            left: 50%;
+            min-width: 200px;
+            max-width: 280px;
+            width: max-content;
+            padding: 0.55rem 0.7rem;
+            background: #09090b;         /* zinc-950 */
+            color: #e4e4e7;              /* zinc-200 */
+            border: 1px solid #3f3f46;   /* zinc-700 */
+            border-radius: 0.375rem;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.45);
+            font-size: 0.72rem;
+            font-weight: 400;
+            line-height: 1.4;
+            white-space: normal;
+            text-align: left;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.12s ease-in, transform 0.12s ease-in;
+            z-index: 1000;
+            transform: translate(-50%, -3px);
+        }
+        .mcm-tooltip::before {
+            content: "";
+            position: absolute;
+            top: calc(100% + 2px);
+            left: 50%;
+            transform: translateX(-50%);
+            border: 6px solid transparent;
+            border-bottom-color: #3f3f46;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.12s ease-in;
+            z-index: 1001;
+        }
+        .mcm-tooltip:hover::after,
+        .mcm-tooltip:focus::after,
+        .mcm-tooltip:focus-within::after,
+        .mcm-tooltip.is-open::after {
+            opacity: 1;
+            transform: translate(-50%, 0);
+        }
+        .mcm-tooltip:hover::before,
+        .mcm-tooltip:focus::before,
+        .mcm-tooltip:focus-within::before,
+        .mcm-tooltip.is-open::before {
+            opacity: 1;
+        }
+
+        /* Edge clamping: auto-applied by JS when near viewport edges. */
+        .mcm-tooltip--left::after   { left: 0; transform: translate(0, -3px); }
+        .mcm-tooltip--left:hover::after,
+        .mcm-tooltip--left:focus::after,
+        .mcm-tooltip--left:focus-within::after,
+        .mcm-tooltip--left.is-open::after { transform: translate(0, 0); }
+
+        .mcm-tooltip--right::after  { left: auto; right: 0; transform: translate(0, -3px); }
+        .mcm-tooltip--right:hover::after,
+        .mcm-tooltip--right:focus::after,
+        .mcm-tooltip--right:focus-within::after,
+        .mcm-tooltip--right.is-open::after { transform: translate(0, 0); }
+
+        /* Flip above when near the bottom of the viewport. */
+        .mcm-tooltip--above::after  { top: auto; bottom: calc(100% + 8px); }
+        .mcm-tooltip--above::before {
+            top: auto;
+            bottom: calc(100% + 2px);
+            border-bottom-color: transparent;
+            border-top-color: #3f3f46;
+        }
+
+        /* ------------------------------------------------------------------
+           Light theme overrides.
+
+           Templates use the dark zinc palette directly (e.g. bg-zinc-900,
+           text-zinc-100). Adding `dark:` prefixes to every class across
+           20-odd templates is a multi-hour churn; instead we remap the
+           most-used classes when [data-theme="light"] is on <html>. Accent
+           colours (indigo / rose / amber / emerald / sky) look fine against
+           light backgrounds so they pass through unchanged.
+        ------------------------------------------------------------------ */
+        html[data-theme="light"] body { background-color: #fafafa; color: #18181b; }
+
+        /* Surfaces: darkest -> lightest so page bg < cards < inputs. */
+        html[data-theme="light"] .bg-zinc-950 { background-color: #f4f4f5 !important; }
+        html[data-theme="light"] .bg-zinc-900 { background-color: #ffffff !important; }
+        html[data-theme="light"] .bg-zinc-800 { background-color: #f4f4f5 !important; }
+        html[data-theme="light"] .hover\:bg-zinc-800:hover { background-color: #e4e4e7 !important; }
+        html[data-theme="light"] .hover\:bg-zinc-700:hover { background-color: #d4d4d8 !important; }
+
+        /* Semi-transparent dark surfaces used in toasts / overlays. */
+        html[data-theme="light"] .bg-zinc-950\/95 { background-color: rgba(255,255,255,0.95) !important; }
+        html[data-theme="light"] .bg-zinc-900\/95 { background-color: rgba(250,250,250,0.95) !important; }
+        html[data-theme="light"] .bg-zinc-800\/50 { background-color: rgba(244,244,245,0.5) !important; }
+        html[data-theme="light"] .hover\:bg-zinc-800\/50:hover { background-color: rgba(228,228,231,0.5) !important; }
+
+        /* Text: invert the lightness scale so text-zinc-100 (brightest) becomes near-black. */
+        html[data-theme="light"] .text-zinc-100 { color: #18181b !important; }
+        html[data-theme="light"] .text-zinc-200 { color: #27272a !important; }
+        html[data-theme="light"] .text-zinc-300 { color: #3f3f46 !important; }
+        html[data-theme="light"] .text-zinc-400 { color: #52525b !important; }
+        html[data-theme="light"] .text-zinc-500 { color: #71717a !important; }
+        html[data-theme="light"] .text-zinc-600 { color: #a1a1aa !important; }
+        html[data-theme="light"] .hover\:text-zinc-100:hover { color: #09090b !important; }
+        html[data-theme="light"] .hover\:text-zinc-200:hover { color: #18181b !important; }
+        html[data-theme="light"] .hover\:text-zinc-300:hover { color: #27272a !important; }
+
+        /* Borders (lighter gray in light mode). */
+        html[data-theme="light"] .border-zinc-600 { border-color: #d4d4d8 !important; }
+        html[data-theme="light"] .border-zinc-700 { border-color: #d4d4d8 !important; }
+        html[data-theme="light"] .border-zinc-800 { border-color: #e4e4e7 !important; }
+        html[data-theme="light"] .divide-zinc-800 > * + * { border-color: #e4e4e7 !important; }
+        html[data-theme="light"] .divide-zinc-800\/50 > * + * { border-color: rgba(228,228,231,0.5) !important; }
+        html[data-theme="light"] .hover\:border-zinc-500:hover { border-color: #a1a1aa !important; }
+        html[data-theme="light"] .hover\:border-zinc-600:hover { border-color: #a1a1aa !important; }
+
+        /* Input fields often use bg-zinc-900 / bg-zinc-950 + border-zinc-700.
+           Caught by the rules above; also override placeholder text. */
+        html[data-theme="light"] ::placeholder { color: #a1a1aa !important; }
+
+        /* Scrollbars pick up body colour; set explicitly so the WebKit bar looks right. */
+        html[data-theme="light"] ::-webkit-scrollbar { background: #f4f4f5; }
+        html[data-theme="light"] ::-webkit-scrollbar-thumb { background: #d4d4d8; }
+
+        /* Sidebar: the body has bg-zinc-900 above; this catches the border. */
+        html[data-theme="light"] aside { background-color: #ffffff !important; }
+
+        /* Tooltip bubble (custom colours, not Tailwind classes). */
+        html[data-theme="light"] .mcm-tooltip::after {
+            background: #ffffff;
+            color: #18181b;
+            border-color: #d4d4d8;
+            box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+        }
+        html[data-theme="light"] .mcm-tooltip::before {
+            border-bottom-color: #d4d4d8;
+        }
+        html[data-theme="light"] .mcm-tooltip--above::before {
+            border-bottom-color: transparent;
+            border-top-color: #d4d4d8;
+        }
+        html[data-theme="light"] .mcm-tooltip {
+            color: #52525b;
+            background: #f4f4f5;
+            border-color: #d4d4d8;
+        }
+
+        /* Kbd blocks inside modals. */
+        html[data-theme="light"] .mcm-kbd {
+            background: #f4f4f5 !important;
+            border-color: #d4d4d8 !important;
+            color: #3f3f46 !important;
+        }
+
+        /* Inline keyboard hints next to filter pills use <kbd> tags with
+           bg-zinc-800/60 + zinc border. The /60 alpha variant dodges the
+           opaque remaps earlier, so fix it directly. */
+        html[data-theme="light"] .bg-zinc-800\/60 { background-color: rgba(228, 228, 231, 0.6) !important; }
+
+        /* Bottom scroll fades: load-bar-fade and bulk-bar-fade use a
+           hard-coded gradient down to zinc-950 (#09090b). In light mode fade
+           into the body colour and match the bar backdrop to the same shade
+           so there's no visible seam between fade and bar (mirrors dark mode
+           where both are bg-zinc-950). Target the bar child by class so the
+           fade div (which lives at the same DOM level) is left alone. */
+        html[data-theme="light"] .load-bar-fade {
+            background: linear-gradient(to bottom, transparent 0%, #fafafa 85%) !important;
+        }
+        html[data-theme="light"] .bulk-bar-fade {
+            background: linear-gradient(to bottom, transparent 0%, #fafafa 95%) !important;
+        }
+        html[data-theme="light"] #load-bar > .bg-zinc-950 {
+            background-color: #fafafa !important;
+        }
+        html[data-theme="light"] #bulk-bar > .bg-zinc-950\/95 {
+            background-color: rgba(250,250,250,0.95) !important;
+        }
+
+        /* The load/bulk bars are position: fixed and stretch left:0 to
+           right:0 so they cover the sidebar on desktop too — hiding the
+           theme toggle. Inset them past the sidebar width (220px matches
+           md:grid-cols-[220px_1fr] on <body>). Mobile leaves left:0 because
+           the sidebar stacks as a top row there. */
+        @media (min-width: 768px) {
+            .load-bar, .bulk-bar { left: 220px !important; }
+        }
+
+        /* Timing pills (Immediate / After grace) and pipeline step icons
+           use bg-sky-500/15 + text-sky-400 / bg-amber-500/15 + text-amber-400.
+           On white the /15 alpha and 400-level text read as washed-out; lift
+           to stronger shades matching the indigo chip fix. */
+        html[data-theme="light"] .bg-sky-500\/15 {
+            background-color: #e0f2fe !important;   /* sky-100 */
+        }
+        html[data-theme="light"] .text-sky-300,
+        html[data-theme="light"] .text-sky-400 {
+            color: #075985 !important;              /* sky-800 */
+        }
+        html[data-theme="light"] .ring-sky-500\/30 {
+            --tw-ring-color: rgba(14, 165, 233, 0.55) !important;
+        }
+        html[data-theme="light"] .hover\:bg-sky-500\/25:hover {
+            background-color: #bae6fd !important;   /* sky-200 */
+        }
+
+        html[data-theme="light"] .bg-amber-500\/15 {
+            background-color: #fef3c7 !important;   /* amber-100 */
+        }
+        html[data-theme="light"] .text-amber-300,
+        html[data-theme="light"] .text-amber-400 {
+            color: #92400e !important;              /* amber-800 */
+        }
+        html[data-theme="light"] .ring-amber-500\/30 {
+            --tw-ring-color: rgba(245, 158, 11, 0.55) !important;
+        }
+        html[data-theme="light"] .hover\:bg-amber-500\/25:hover {
+            background-color: #fde68a !important;   /* amber-200 */
+        }
+
+        /* Chips (protected users/tags/collections, watchlist user chips,
+           pipeline-step collection/tag chips, allowlist values). In dark mode
+           these use bg-indigo-500/15 + text-indigo-300 which pops nicely; on
+           a white background the /15 alpha washes out and indigo-300 is too
+           pale, so the chips read as disabled. Lift the alpha + darken the
+           text + add an outline so they read as active pills. */
+        html[data-theme="light"] .chip,
+        html[data-theme="light"] .chip-input .chip {
+            background-color: #e0e7ff !important;   /* indigo-100 */
+            color: #3730a3 !important;              /* indigo-800 */
+            border: 1px solid #c7d2fe !important;   /* indigo-200 */
+        }
+        html[data-theme="light"] .chip .chip-remove {
+            color: #4f46e5 !important;              /* indigo-600 */
+        }
+        html[data-theme="light"] .chip .chip-remove:hover {
+            color: #312e81 !important;              /* indigo-900 */
+        }
+        /* Chip input wrapper uses bg-zinc-800 as its shell - looks dark on
+           light mode. Keep it white with a gray border. */
+        html[data-theme="light"] .chip-input {
+            background-color: #ffffff !important;
+            border-color: #d4d4d8 !important;
+        }
+        html[data-theme="light"] .chip-input input {
+            color: #18181b !important;
+        }
+        html[data-theme="light"] .chip-suggestions {
+            background-color: #ffffff !important;
+            border-color: #d4d4d8 !important;
+        }
+        html[data-theme="light"] .chip-suggestion {
+            color: #3f3f46 !important;
+        }
+        html[data-theme="light"] .chip-suggestion:hover {
+            background-color: #f4f4f5 !important;
+            color: #09090b !important;
+        }
+        html[data-theme="light"] .chip-suggestion.highlighted {
+            background-color: #e0e7ff !important;
+            color: #3730a3 !important;
+        }
+
+        /* Theme toggle button in the sidebar footer. */
+        .theme-toggle {
+            @apply flex items-center gap-2 px-3 py-2 rounded-md text-sm
+                   text-zinc-400 hover:bg-indigo-500/10 hover:text-zinc-100
+                   w-full transition-colors cursor-pointer bg-transparent
+                   border border-zinc-700/0 hover:border-zinc-700/40;
+        }
+        .theme-toggle svg { @apply w-5 h-5 shrink-0; }
+        /* Show the sun icon in dark mode (so it reads "click for light")
+           and the moon in light mode (click for dark). */
+        /* Icon visibility follows the stored preference (data-theme-pref),
+           not the resolved theme — so 'auto' shows the monitor icon even
+           when the resolved theme flips with the system. */
+        html[data-theme-pref="dark"]  .theme-toggle .icon-sun,
+        html[data-theme-pref="dark"]  .theme-toggle .icon-auto { display: none; }
+        html[data-theme-pref="light"] .theme-toggle .icon-moon,
+        html[data-theme-pref="light"] .theme-toggle .icon-auto { display: none; }
+        html[data-theme-pref="auto"]  .theme-toggle .icon-sun,
+        html[data-theme-pref="auto"]  .theme-toggle .icon-moon { display: none; }
+
+        /* Kbd hint inside modals. */
+        .mcm-kbd {
+            @apply inline-flex items-center justify-center
+                   px-1.5 py-0.5 rounded-sm text-[10px] font-semibold
+                   bg-zinc-800 border border-zinc-700 text-zinc-300
+                   align-middle leading-none;
+            font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+        }
+        .mcm-kbd-hint {
+            @apply flex items-center justify-center gap-1.5 mt-4
+                   text-[11px] text-zinc-500 select-none;
+        }
+    </style>
+</head>
+<body class="grid min-h-screen m-0 p-0 bg-zinc-950 text-zinc-100 md:grid-cols-[220px_1fr] grid-cols-1">
+    <aside class="md:sticky md:top-0 md:h-screen md:overflow-y-auto md:border-r md:border-zinc-700 bg-zinc-900 p-4 md:p-4 border-b border-zinc-700 md:border-b-0 md:flex md:flex-col">
+        <div class="text-2xl font-extrabold px-3 pb-5 tracking-wide bg-gradient-to-br from-indigo-500 to-violet-400 bg-clip-text text-transparent hidden md:block">MCM</div>
+        <nav class="md:flex-1">
+            <ul class="list-none p-0 m-0 flex md:flex-col gap-1 md:gap-0.5">
+                <li><a href="/rules" class="nav-link" {% if request.url.path == '/rules' or request.url.path.startswith('/rules') %}aria-current="page"{% endif %}><svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><rect x="1" y="2" width="18" height="2.5" rx="1"/><rect x="1" y="8.5" width="18" height="2.5" rx="1"/><rect x="1" y="15" width="18" height="2.5" rx="1"/></svg>Rules</a></li>
+                <li><a href="/search" class="nav-link" {% if request.url.path == '/search' or request.url.path.startswith('/items/') %}aria-current="page"{% endif %}><svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="8.5" cy="8.5" r="5.5"/><line x1="12.5" y1="12.5" x2="17" y2="17" stroke-linecap="round"/></svg>Item Lookup</a></li>
+                <li><a href="/activity" class="nav-link" {% if request.url.path.startswith('/activity') %}aria-current="page"{% endif %}><svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><polygon points="7,4 16,10 7,16" fill="currentColor"/></svg>Watch History</a></li>
+                <li><a href="/logs" class="nav-link" {% if request.url.path.startswith('/logs') %}aria-current="page"{% endif %}><svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="1" width="16" height="18" rx="1.5"/><line x1="5" y1="5" x2="15" y2="5"/><line x1="5" y1="9" x2="15" y2="9"/><line x1="5" y1="13" x2="11" y2="13"/></svg>Logs</a></li>
+                <li><a href="/settings" class="nav-link" {% if request.url.path.startswith('/settings') %}aria-current="page"{% endif %}><svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>Settings</a></li>
+            </ul>
+            {% if request.url.path.startswith('/settings') %}
+            <ul class="nav-sub list-none p-0 m-0 pl-5 mt-1 flex md:flex-col gap-1 md:gap-0.5">
+                <li><a href="/settings/media" class="nav-link" {% if 'media' in request.url.path %}aria-current="page"{% endif %}><svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="16" height="12" rx="1.5"/><line x1="6" y1="15" x2="6" y2="18"/><line x1="14" y1="15" x2="14" y2="18"/><line x1="4" y1="18" x2="16" y2="18"/></svg>Media Servers</a></li>
+                <li><a href="/settings/statistics" class="nav-link" {% if 'statistics' in request.url.path %}aria-current="page"{% endif %}><svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><rect x="2" y="12" width="3" height="6" rx="0.5"/><rect x="7" y="8" width="3" height="10" rx="0.5"/><rect x="12" y="4" width="3" height="14" rx="0.5"/></svg>Watch History</a></li>
+                <li><a href="/settings/downloads" class="nav-link" {% if 'downloads' in request.url.path %}aria-current="page"{% endif %}><svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 2v11M6 9l4 4 4-4M3 14v3h14v-3" stroke-linecap="round" stroke-linejoin="round"/></svg>Downloaders</a></li>
+                <li><a href="/settings/notifications" class="nav-link" {% if 'notifications' in request.url.path %}aria-current="page"{% endif %}><svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M10 2a5 5 0 015 5c0 4 2 6 2 6H3s2-2 2-6a5 5 0 015-5zM8 15a2 2 0 004 0" stroke-linecap="round" stroke-linejoin="round"/></svg>Notifications</a></li>
+                <li><a href="/settings/schedule" class="nav-link" {% if 'schedule' in request.url.path %}aria-current="page"{% endif %}><svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="10" cy="10" r="7.5"/><path d="M10 5.5V10l3 2" stroke-linecap="round"/></svg>Schedule</a></li>
+            </ul>
+            {% endif %}
+        </nav>
+        <!-- Theme toggle (bottom-left). -->
+        <div class="hidden md:block mt-4 pt-3 border-t border-zinc-700">
+            <button type="button" id="mcm-theme-toggle" class="theme-toggle" aria-label="Cycle theme (dark, light, auto)" title="Click to cycle: dark → light → auto">
+                <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
+                </svg>
+                <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <circle cx="12" cy="12" r="4"/>
+                    <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/>
+                </svg>
+                <svg class="icon-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                    <rect x="2.5" y="4" width="19" height="13" rx="2"/>
+                    <path d="M8 21h8M12 17v4"/>
+                </svg>
+                <span class="label-dark">Dark mode</span>
+                <span class="label-light">Light mode</span>
+                <span class="label-auto">Auto mode</span>
+            </button>
+        </div>
+    </aside>
+    <style>
+        html[data-theme-pref="dark"]  .theme-toggle .label-light,
+        html[data-theme-pref="dark"]  .theme-toggle .label-auto  { display: none; }
+        html[data-theme-pref="light"] .theme-toggle .label-dark,
+        html[data-theme-pref="light"] .theme-toggle .label-auto  { display: none; }
+        html[data-theme-pref="auto"]  .theme-toggle .label-dark,
+        html[data-theme-pref="auto"]  .theme-toggle .label-light { display: none; }
+    </style>
+    <script>
+    (function () {
+        const html = document.documentElement;
+        const mql = window.matchMedia('(prefers-color-scheme: light)');
+        function resolve(pref) {
+            if (pref === 'auto') return mql.matches ? 'light' : 'dark';
+            return pref;
+        }
+        function apply(pref) {
+            const resolved = resolve(pref);
+            html.setAttribute('data-theme', resolved);
+            html.setAttribute('data-theme-pref', pref);
+            html.classList.toggle('dark', resolved === 'dark');
+            try { localStorage.setItem('mcm-theme', pref); } catch (_) {}
+        }
+        // When pref is 'auto', track system changes at runtime.
+        mql.addEventListener('change', () => {
+            if (html.getAttribute('data-theme-pref') === 'auto') apply('auto');
+        });
+        const btn = document.getElementById('mcm-theme-toggle');
+        if (!btn) return;
+        const order = ['dark', 'light', 'auto'];
+        btn.addEventListener('click', () => {
+            const cur = html.getAttribute('data-theme-pref') || 'auto';
+            const next = order[(order.indexOf(cur) + 1) % order.length];
+            apply(next);
+        });
+    })();
+    </script>
+    <main class="p-4 md:px-8 md:py-6 overflow-y-auto min-h-screen">
+        {% block content %}{% endblock %}
+        <footer>
+        </footer>
+    </main>
+</body>
+</html>
