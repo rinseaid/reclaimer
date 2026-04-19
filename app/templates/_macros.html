@@ -1,0 +1,20 @@
+{#
+    Reusable macros, imported independently of base.html so templates
+    can pull them in without triggering base.html's context-dependent
+    sidebar rendering (which uses `request`).
+
+    Usage:
+        {% from "_macros.html" import spinner, empty_state %}
+#}
+{%- macro spinner(size='w-5 h-5', color='text-indigo-400') -%}
+<svg class="{{ size }} shrink-0 animate-spin {{ color }}" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-opacity="0.2"/>
+    <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+</svg>
+{%- endmacro -%}
+
+{%- macro empty_state(message) -%}
+<div class="text-center py-12 px-4 border-2 border-dashed border-zinc-700 rounded-lg">
+    <p class="text-zinc-500">{{ message }}</p>
+</div>
+{%- endmacro -%}

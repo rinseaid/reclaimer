@@ -1,0 +1,293 @@
+{% extends "base.html" %}
+{% block title %}Settings - Schedule{% endblock %}
+{% block content %}
+<style>
+    @keyframes toast-in {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes toast-out {
+        from { opacity: 1; transform: translateY(0); }
+        to { opacity: 0; transform: translateY(10px); }
+    }
+</style>
+
+<div class="mb-6">
+    <h2 class="text-2xl font-bold text-zinc-100">Schedule</h2>
+    <p class="text-sm text-zinc-400 mt-1">Automated schedule and manual runs</p>
+</div>
+
+<form id="settings-form">
+
+<!-- Nightly Schedule -->
+<div class="bg-zinc-900 rounded-lg p-6 border border-zinc-800 mb-6">
+    <h3 class="text-lg font-semibold text-zinc-100 mb-4">Nightly Schedule</h3>
+    <div class="text-2xl font-semibold tabular-nums text-indigo-400 mb-2" id="schedule-preview">--:--</div>
+    <p class="text-xs text-zinc-500 mb-4">MCM runs automatically every night at this time. It processes all enabled rules, evaluates criteria, and takes the configured action on matching items. Changing this takes effect on the next scheduled cycle.</p>
+    <div class="grid grid-cols-2 gap-4">
+        <div>
+            <label class="block text-sm font-medium text-zinc-300 mb-1">Hour (0-23)</label>
+            <select name="schedule_hour" id="schedule-hour"
+                    class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"></select>
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-zinc-300 mb-1">Minute (0-59)</label>
+            <select name="schedule_minute" id="schedule-minute"
+                    class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"></select>
+        </div>
+    </div>
+</div>
+
+<!-- User & Watch History Sync -->
+<div class="bg-zinc-900 rounded-lg p-6 border border-zinc-800 mb-6">
+    <h3 class="text-lg font-semibold text-zinc-100 mb-4">User & Watch History Sync</h3>
+    <p class="text-xs text-zinc-500 mb-4">Refreshes users and watch history straight from Plex and Jellyfin. Runs independently from rule scans.</p>
+    <div class="max-w-xs mb-4">
+        <label class="block text-sm font-medium text-zinc-300 mb-1">Sync interval (hours)</label>
+        <input type="number" name="user_sync_interval_hours" min="1" max="72" value="6"
+               class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+        <p class="text-xs text-zinc-500 mt-1">How often to refresh user watch history. Default: every 6 hours.</p>
+    </div>
+    <div class="flex items-center gap-3">
+        <button type="button" id="btn-sync-users" onclick="triggerUserSync()"
+                class="rounded-md px-3 py-1.5 text-sm font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent">Sync Now</button>
+        <span id="sync-status" class="text-sm text-zinc-500"></span>
+    </div>
+</div>
+
+<!-- Manual Run -->
+<div class="bg-zinc-900 rounded-lg p-6 border border-zinc-800 mb-6">
+    <h3 class="text-lg font-semibold text-zinc-100 mb-4">Manual Run</h3>
+    <p class="text-xs text-zinc-500 mb-4">Trigger a run right now without waiting for the nightly schedule. A dry run shows you what would happen without actually making any changes -- useful for testing new rules. A full run will take real actions (unmonitor, delete, etc.) based on your rule settings.</p>
+    <div id="run-status-display" class="mb-3 text-sm text-zinc-300"></div>
+    <div class="flex items-center gap-3 flex-wrap">
+        <button type="button" id="btn-dry-run" onclick="triggerRun(true)"
+                class="rounded-md px-3 py-1.5 text-sm font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent">Dry Run</button>
+        <button type="button" id="btn-full-run" onclick="triggerRun(false)"
+                class="rounded-md px-3 py-1.5 text-sm font-medium bg-indigo-500 hover:bg-indigo-400 text-white">Full Run</button>
+    </div>
+</div>
+
+<!-- Sticky save bar -->
+<div class="sticky bottom-0 bg-zinc-950 py-4 border-t border-zinc-800 mt-6 flex justify-end gap-3">
+    <button type="submit" id="save-btn"
+            class="rounded-md px-3 py-1.5 text-sm font-medium bg-indigo-500 hover:bg-indigo-400 text-white">Save Settings</button>
+</div>
+
+</form>
+
+<!-- Toast container -->
+<div class="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2" id="toast-container"></div>
+
+<script>
+(function() {
+    const NUMBER_KEYS = new Set(['schedule_hour', 'schedule_minute', 'user_sync_interval_hours']);
+
+    function toast(msg, type) {
+        const container = document.getElementById('toast-container');
+        const el = document.createElement('div');
+        const bg = type === 'success' ? 'bg-emerald-600' : 'bg-rose-600';
+        el.className = `${bg} text-white text-sm font-medium px-5 py-3 rounded-md shadow-lg max-w-sm`;
+        el.style.animation = 'toast-in 0.25s ease-out';
+        el.textContent = msg;
+        container.appendChild(el);
+        setTimeout(() => {
+            el.style.animation = 'toast-out 0.25s ease-in forwards';
+            setTimeout(() => el.remove(), 250);
+        }, 3000);
+    }
+
+    function updateSchedulePreview() {
+        const h = document.getElementById('schedule-hour').value;
+        const m = document.getElementById('schedule-minute').value;
+        document.getElementById('schedule-preview').textContent =
+            String(h).padStart(2, '0') + ':' + String(m).padStart(2, '0');
+    }
+
+    const hourSel = document.getElementById('schedule-hour');
+    const minSel = document.getElementById('schedule-minute');
+    for (let i = 0; i < 24; i++) {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = String(i).padStart(2, '0');
+        hourSel.appendChild(opt);
+    }
+    for (let i = 0; i < 60; i += 5) {
+        const opt = document.createElement('option');
+        opt.value = i;
+        opt.textContent = String(i).padStart(2, '0');
+        minSel.appendChild(opt);
+    }
+    hourSel.addEventListener('change', updateSchedulePreview);
+    minSel.addEventListener('change', updateSchedulePreview);
+
+    function populateForm(settings) {
+        for (const [key, val] of Object.entries(settings)) {
+            const el = document.querySelector(`[name="${key}"]`);
+            if (!el) continue;
+
+            if (el.tagName === 'SELECT') {
+                el.value = val;
+            } else {
+                el.value = val ?? '';
+            }
+        }
+        updateSchedulePreview();
+    }
+
+    document.getElementById('settings-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const formData = new FormData(e.target);
+        const updates = {};
+
+        const allKeys = ['schedule_hour', 'schedule_minute', 'user_sync_interval_hours'];
+
+        for (const key of allKeys) {
+            if (NUMBER_KEYS.has(key)) {
+                updates[key] = parseInt(formData.get(key)) || 0;
+            } else {
+                updates[key] = formData.get(key) ?? '';
+            }
+        }
+
+        const btn = document.getElementById('save-btn');
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+        btn.classList.add('opacity-50', 'cursor-not-allowed');
+
+        fetch('/api/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ settings: updates }),
+        })
+        .then(r => {
+            if (!r.ok) throw new Error('Server returned ' + r.status);
+            return r.json();
+        })
+        .then(data => {
+            const count = (data.updated || []).length;
+            toast('Settings saved (' + count + ' fields updated)', 'success');
+        })
+        .catch(err => toast('Failed to save: ' + err.message, 'error'))
+        .finally(() => {
+            btn.disabled = false;
+            btn.textContent = 'Save Settings';
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        });
+    });
+
+    window.triggerRun = function(dryRun) {
+        const btnDry = document.getElementById('btn-dry-run');
+        const btnFull = document.getElementById('btn-full-run');
+        btnDry.disabled = true;
+        btnFull.disabled = true;
+        btnDry.classList.add('opacity-50', 'cursor-not-allowed');
+        btnFull.classList.add('opacity-50', 'cursor-not-allowed');
+
+        const statusEl = document.getElementById('run-status-display');
+        statusEl.innerHTML = '<span class="text-zinc-400">Starting...</span>';
+
+        fetch('/api/run?dry_run=' + dryRun, { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'already_running') {
+                    toast('A run is already in progress', 'error');
+                    btnDry.disabled = false;
+                    btnFull.disabled = false;
+                    btnDry.classList.remove('opacity-50', 'cursor-not-allowed');
+                    btnFull.classList.remove('opacity-50', 'cursor-not-allowed');
+                    return;
+                }
+                toast((dryRun ? 'Dry run' : 'Full run') + ' started', 'success');
+                pollRunStatus();
+            })
+            .catch(err => {
+                toast('Failed to start run: ' + err.message, 'error');
+                btnDry.disabled = false;
+                btnFull.disabled = false;
+                btnDry.classList.remove('opacity-50', 'cursor-not-allowed');
+                btnFull.classList.remove('opacity-50', 'cursor-not-allowed');
+                statusEl.innerHTML = '';
+            });
+    };
+
+    function pollRunStatus() {
+        const statusEl = document.getElementById('run-status-display');
+        const btnDry = document.getElementById('btn-dry-run');
+        const btnFull = document.getElementById('btn-full-run');
+
+        const poll = () => {
+            fetch('/api/run/progress')
+                .then(r => r.json())
+                .then(data => {
+                    if (!data.running) {
+                        statusEl.innerHTML = '<span class="text-emerald-400">Run completed.</span>';
+                        btnDry.disabled = false;
+                        btnFull.disabled = false;
+                        btnDry.classList.remove('opacity-50', 'cursor-not-allowed');
+                        btnFull.classList.remove('opacity-50', 'cursor-not-allowed');
+                        return;
+                    }
+                    let info = data.phase || 'Running...';
+                    if (data.detail) info += ' - ' + data.detail;
+                    if (data.percent > 0) info += ' (' + data.percent + '%)';
+                    statusEl.innerHTML = '<span class="text-zinc-400">' + info + '</span>';
+                    setTimeout(poll, 2000);
+                })
+                .catch(() => setTimeout(poll, 3000));
+        };
+        setTimeout(poll, 1000);
+    }
+
+    window.triggerUserSync = function() {
+        const btn = document.getElementById('btn-sync-users');
+        const statusEl = document.getElementById('sync-status');
+        btn.disabled = true;
+        btn.classList.add('opacity-50', 'cursor-not-allowed');
+        statusEl.textContent = 'Starting...';
+
+        fetch('/api/run/sync-users', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.status === 'started') {
+                    toast('User sync started', 'success');
+                    statusEl.textContent = 'Sync running...';
+                    setTimeout(() => { statusEl.textContent = ''; }, 10000);
+                } else {
+                    toast('Unexpected response', 'error');
+                }
+            })
+            .catch(err => {
+                toast('Failed to start sync: ' + err.message, 'error');
+                statusEl.textContent = '';
+            })
+            .finally(() => {
+                btn.disabled = false;
+                btn.classList.remove('opacity-50', 'cursor-not-allowed');
+            });
+    };
+
+    fetch('/api/settings')
+        .then(r => {
+            if (!r.ok) throw new Error('Server returned ' + r.status);
+            return r.json();
+        })
+        .then(settings => populateForm(settings))
+        .catch(err => toast('Failed to load settings: ' + err.message, 'error'));
+
+    fetch('/api/run/status')
+        .then(r => r.json())
+        .then(data => {
+            if (data.running) {
+                document.getElementById('btn-dry-run').disabled = true;
+                document.getElementById('btn-full-run').disabled = true;
+                document.getElementById('btn-dry-run').classList.add('opacity-50', 'cursor-not-allowed');
+                document.getElementById('btn-full-run').classList.add('opacity-50', 'cursor-not-allowed');
+                pollRunStatus();
+            }
+        })
+        .catch(() => {});
+})();
+</script>
+{% endblock %}

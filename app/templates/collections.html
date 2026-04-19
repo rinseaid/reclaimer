@@ -1,0 +1,1717 @@
+{% extends "base.html" %}
+{% block title %}{{ name }}{% endblock %}
+{% block content %}
+
+<!-- Run progress banner, hidden by default. Populated by showProgress()
+     when a run is in flight for this rule. -->
+<div id="run-progress" class="hidden mb-4 px-4 py-3 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
+    <div class="flex items-center gap-3 mb-2">
+        <svg class="w-5 h-5 shrink-0 animate-spin text-indigo-400" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-opacity="0.2"/>
+            <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+        <div class="flex-1">
+            <strong id="run-phase" class="text-zinc-100">Starting...</strong>
+            <small id="run-detail" class="block text-zinc-400"></small>
+        </div>
+        <small id="run-items" class="text-zinc-400"></small>
+    </div>
+    <progress id="run-bar" value="0" max="100" class="w-full"></progress>
+</div>
+
+<nav class="flex items-center gap-2 text-sm text-zinc-400 mb-6">
+  <a href="/rules" class="text-sky-500 hover:text-sky-400">Rules</a>
+  <span class="text-zinc-600">/</span>
+  <span id="breadcrumb-name" class="text-zinc-100">{{ name.replace('-', ' ').title() }}</span>
+</nav>
+
+<div class="mb-1">
+  <h2 id="col-title" class="text-2xl font-bold text-zinc-100 inline">{{ name.replace('-', ' ').title() }}</h2>
+  <span id="col-badges" class="ml-3 align-middle"></span>
+</div>
+
+<div class="flex gap-3 items-center mb-3 flex-wrap mt-4">
+  <input type="search" id="search-box" placeholder="Search by title..." autocomplete="off"
+         class="max-w-96 bg-zinc-900 border border-zinc-700 rounded-md px-3 py-2 text-sm text-zinc-100 focus:border-indigo-500 focus:outline-none placeholder-zinc-500">
+  <div class="relative inline-flex" id="run-split">
+    <button type="button" id="btn-run-rule"
+            class="rounded-l-md px-3 py-1.5 text-sm font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent transition-colors border-r-0"
+            title="Run this rule">Run</button>
+    <button type="button" id="btn-run-menu" aria-haspopup="true" aria-expanded="false" aria-label="Run options"
+            class="rounded-r-md px-2 py-1.5 text-sm font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent transition-colors">▾</button>
+    <div id="run-menu"
+         class="hidden absolute right-0 top-full mt-1 min-w-[200px] rounded-md border border-zinc-700 bg-zinc-900 shadow-lg z-40 py-1"
+         role="menu" aria-label="Run options">
+      <button type="button" data-run-mode="dry" role="menuitem"
+              class="w-full text-left px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800">
+        <span class="font-medium">Run dry</span>
+        <span class="block text-xs text-zinc-500">No changes - preview what would match.</span>
+      </button>
+      <button type="button" data-run-mode="live" role="menuitem"
+              class="w-full text-left px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800">
+        <span class="font-medium">Run live</span>
+        <span class="block text-xs text-zinc-500">Apply the pipeline to matching items.</span>
+      </button>
+    </div>
+  </div>
+  <a href="/logs?rule={{ name }}" title="View logs for this rule"
+     class="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent no-underline transition-colors">
+    View logs
+  </a>
+  <a href="/rules/{{ name }}/settings" title="Rule Settings"
+     class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent no-underline transition-colors">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+    Settings
+  </a>
+</div>
+
+<!-- Filter pills -->
+<div id="filter-pills" class="flex items-center gap-2 mb-3 flex-wrap" role="tablist" aria-label="Filter items">
+  <button type="button" data-filter="all"          class="filter-pill" role="tab">All</button>
+  <button type="button" data-filter="staged"       class="filter-pill" role="tab">Staged</button>
+  <button type="button" data-filter="actioned"     class="filter-pill" role="tab">Actioned</button>
+  <button type="button" data-filter="kept"         class="filter-pill" role="tab">Kept</button>
+  <button type="button" data-filter="force-delete" class="filter-pill" role="tab">Force delete</button>
+  <span class="ml-2 text-xs text-zinc-500 hidden md:inline-flex items-center gap-1">
+    <kbd class="px-1.5 py-0.5 rounded border border-zinc-700 bg-zinc-800/60 text-[0.65rem] text-zinc-400 font-mono">x</kbd>
+    <span class="text-zinc-600">toggle hovered row</span>
+    <kbd class="ml-2 px-1.5 py-0.5 rounded border border-zinc-700 bg-zinc-800/60 text-[0.65rem] text-zinc-400 font-mono">a</kbd>
+    <span class="text-zinc-600">all visible</span>
+    <kbd class="ml-2 px-1.5 py-0.5 rounded border border-zinc-700 bg-zinc-800/60 text-[0.65rem] text-zinc-400 font-mono">Esc</kbd>
+    <span class="text-zinc-600">clear</span>
+  </span>
+</div>
+
+<div class="flex items-center gap-3 mb-2 flex-wrap">
+  <p id="col-summary" class="text-zinc-500 text-sm m-0"></p>
+  <button type="button" id="hdr-load-all-btn"
+          class="hidden rounded-md border border-zinc-600 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 px-2 py-0.5 cursor-pointer text-xs transition-all duration-150 bg-transparent"
+          onclick="loadAll()">Load all</button>
+</div>
+<div id="col-data"><p class="text-zinc-400 text-sm animate-pulse">Loading rule...</p></div>
+
+<!-- Bulk action bar (shown when items are selected) -->
+<div id="bulk-bar" class="bulk-bar hidden" role="region" aria-label="Bulk actions">
+  <div class="bulk-bar-fade"></div>
+  <div class="bg-zinc-950/95 backdrop-blur-sm border-t border-zinc-800 flex items-center justify-center gap-3 px-4 pt-3 pb-4" style="pointer-events: auto;">
+    <span id="bulk-count" class="text-sm font-semibold text-zinc-100">0 selected</span>
+    <button type="button" id="bulk-keep-btn"
+      class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-xs font-semibold bg-indigo-500 hover:bg-indigo-400 text-white transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+      Keep
+    </button>
+    <button type="button" id="bulk-clear-btn"
+      class="inline-flex items-center gap-1.5 rounded-md border border-zinc-600 text-zinc-300 hover:bg-zinc-800 hover:text-zinc-100 px-3 py-1.5 text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+      Clear override
+    </button>
+    <button type="button" id="bulk-cancel-btn"
+      class="inline-flex items-center gap-1.5 rounded-md text-zinc-400 hover:text-zinc-200 px-2 py-1.5 text-xs font-medium transition-colors">
+      Cancel
+    </button>
+  </div>
+</div>
+
+<!-- Live Run confirmation dialog (matches the one on the Rules page). -->
+<dialog id="live-run-dialog" class="rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-100 p-0 backdrop:bg-black/60 max-w-md w-full">
+  <div class="p-6">
+    <h3 id="live-run-dialog-title" class="text-lg font-semibold text-zinc-100 mb-2">Start Live Run?</h3>
+    <p id="live-run-dialog-body" class="text-zinc-400 text-sm mb-5">This will apply actions to matching items. Continue?</p>
+    <div class="flex gap-3 justify-end">
+      <button type="button" class="rounded-md px-3 py-1.5 text-sm font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent" onclick="document.getElementById('live-run-dialog').close()">Cancel</button>
+      <button type="button" id="live-run-confirm-btn" class="rounded-md px-3 py-1.5 text-sm font-medium bg-amber-500 hover:bg-amber-400 text-zinc-900">Start Live Run</button>
+    </div>
+    <div class="mcm-kbd-hint"><span>Press</span> <kbd class="mcm-kbd">Esc</kbd> <span>to close</span></div>
+  </div>
+</dialog>
+
+<!-- Toast container -->
+<div id="toast-container" class="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none"></div>
+<!-- Spacer so fixed load-bar doesn't cover last rows -->
+<div id="load-bar-spacer" class="h-14"></div>
+<div id="load-bar" class="load-bar hidden">
+    <div class="load-bar-fade"></div>
+    <div class="bg-zinc-950 flex items-center justify-center gap-4 px-0 pt-2 pb-4" style="pointer-events: auto;">
+        <span id="load-status" class="text-zinc-400 text-sm"></span>
+        <button id="load-more-btn" onclick="loadMore()"
+            class="bg-transparent rounded-md border border-zinc-600 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 px-3 py-1 cursor-pointer text-xs transition-all duration-150">
+            Load more
+        </button>
+        <button id="load-all-btn" onclick="loadAll()"
+            class="bg-transparent rounded-md border border-zinc-600 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 px-3 py-1 cursor-pointer text-xs transition-all duration-150">
+            Load all
+        </button>
+    </div>
+</div>
+
+<style>
+  /* Simple native-tooltip fallback for [title] attr - browser handles this */
+  /* Tooltip system for rule icons */
+  [data-tooltip] { position: relative; cursor: help; }
+  [data-tooltip]::after {
+    content: attr(data-tooltip);
+    position: absolute;
+    bottom: calc(100% + 6px);
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 4px 8px;
+    border-radius: 6px;
+    background: #27272a;
+    border: 1px solid #3f3f46;
+    color: #d4d4d8;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s;
+    z-index: 999;
+  }
+  [data-tooltip]:hover::after { opacity: 1; }
+
+  /* Bottom load bar: fade + buttons */
+  .load-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 10;
+      pointer-events: none;
+      transition: opacity 0.3s;
+  }
+  .load-bar.hidden { opacity: 0; pointer-events: none; }
+  .load-bar-fade {
+      height: 8rem;
+      background: linear-gradient(to bottom, transparent 0%, #09090b 85%);
+  }
+
+  /* Kill bottom padding/margin so load bar sits flush */
+  main { padding-bottom: 0 !important; margin-bottom: 0 !important; }
+  body { padding-bottom: 0 !important; margin-bottom: 0 !important; }
+  footer { display: none !important; }
+
+  /* Filter pills - shared style, indigo fill when active */
+  .filter-pill {
+      display: inline-flex;
+      align-items: center;
+      padding: 0.25rem 0.75rem;
+      border-radius: 9999px;
+      border: 1px solid #3f3f46; /* zinc-700 */
+      background: transparent;
+      color: #a1a1aa; /* zinc-400 */
+      font-size: 0.75rem;
+      font-weight: 600;
+      letter-spacing: 0.01em;
+      cursor: pointer;
+      transition: all 0.15s ease;
+      user-select: none;
+  }
+  .filter-pill:hover {
+      color: #e4e4e7; /* zinc-200 */
+      border-color: #52525b; /* zinc-600 */
+      background: rgba(63, 63, 70, 0.3);
+  }
+  .filter-pill[aria-selected="true"] {
+      background: #6366f1; /* indigo-500 */
+      border-color: #6366f1;
+      color: #fff;
+  }
+  .filter-pill[aria-selected="true"]:hover {
+      background: #818cf8; /* indigo-400 */
+      border-color: #818cf8;
+  }
+
+  /* Bulk action bar (pinned to bottom above load bar) */
+  .bulk-bar {
+      position: fixed;
+      bottom: 0;
+      left: 0;
+      right: 0;
+      z-index: 20;
+      pointer-events: none;
+      transition: transform 0.25s ease, opacity 0.25s ease;
+  }
+  .bulk-bar.hidden { opacity: 0; transform: translateY(8px); pointer-events: none; }
+  .bulk-bar-fade {
+      height: 4rem;
+      background: linear-gradient(to bottom, transparent 0%, #09090b 95%);
+  }
+  /* When bulk bar is visible, hide the load bar to avoid stacking */
+  body.bulk-active #load-bar { display: none; }
+
+  /* Row highlight pulse after override changes */
+  @keyframes row-override-pulse {
+      0%   { background-color: rgba(14, 165, 233, 0.18); }  /* sky-500/18 */
+      70%  { background-color: rgba(14, 165, 233, 0.10); }
+      100% { background-color: transparent; }
+  }
+  tr.row-pulse {
+      animation: row-override-pulse 800ms ease-out;
+  }
+
+  /* Row-selected visual cue */
+  tr.row-selected {
+      background-color: rgba(99, 102, 241, 0.08) !important; /* indigo-500/8 */
+  }
+  tr.row-selected:hover {
+      background-color: rgba(99, 102, 241, 0.14) !important;
+  }
+
+  /* Native checkbox styling nudge for dark theme */
+  .item-check, .select-all-check {
+      cursor: pointer;
+      accent-color: #6366f1; /* indigo-500 */
+      width: 0.95rem;
+      height: 0.95rem;
+  }
+</style>
+
+<script>
+/* Shared toast helper */
+window.showToast = function(message, kind) {
+    kind = kind || 'success';
+    const palette = {
+        success: 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300',
+        error:   'bg-rose-500/15 border-rose-500/40 text-rose-300',
+        info:    'bg-sky-500/15 border-sky-500/40 text-sky-300',
+    };
+    const cls = palette[kind] || palette.success;
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = `pointer-events-auto px-4 py-2.5 rounded-md border text-sm font-medium shadow-lg transition-all duration-200 opacity-0 translate-y-[-6px] ${cls}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    requestAnimationFrame(() => {
+        toast.classList.remove('opacity-0', 'translate-y-[-6px]');
+    });
+    setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-[-6px]');
+        setTimeout(() => toast.remove(), 250);
+    }, 3000);
+};
+
+const colName = "{{ name }}";
+
+// --- URL-backed view state ---
+// Read initial state from URL so the back button restores the view.
+// Param names: search, sort, dir, filter
+const VALID_SORTS = new Set(['title', 'first_seen', 'grace_expires', 'size_bytes']);
+const VALID_DIRS  = new Set(['asc', 'desc']);
+const VALID_FILTERS = new Set(['all', 'staged', 'actioned', 'kept', 'force-delete']);
+
+function readURLState() {
+    const p = new URLSearchParams(location.search);
+    const sort = VALID_SORTS.has(p.get('sort')) ? p.get('sort') : 'first_seen';
+    const dir  = VALID_DIRS.has(p.get('dir'))  ? p.get('dir')  : 'asc';
+    const filter = VALID_FILTERS.has(p.get('filter')) ? p.get('filter') : 'all';
+    const search = p.get('search') || '';
+    return { sort, dir, filter, search };
+}
+
+function writeURLState(opts) {
+    // Build the URL without triggering a navigation. Non-default values only,
+    // so URLs stay tidy.
+    const p = new URLSearchParams();
+    if (currentSearch.trim()) p.set('search', currentSearch.trim());
+    if (currentSort !== 'first_seen') p.set('sort', currentSort);
+    if (currentSortDir !== 'asc') p.set('dir', currentSortDir);
+    if (currentFilter !== 'all') p.set('filter', currentFilter);
+    const qs = p.toString();
+    const url = qs ? `${location.pathname}?${qs}` : location.pathname;
+    const method = (opts && opts.replace) ? 'replaceState' : 'pushState';
+    history[method]({}, '', url);
+}
+
+const _initState = readURLState();
+let currentSearch  = _initState.search;
+let currentSort    = _initState.sort;
+let currentSortDir = _initState.dir;
+let currentFilter  = _initState.filter;   // 'all' | 'staged' | 'actioned' | 'kept' | 'force-delete'
+let searchTimer = null;
+
+// Infinite scroll state
+const ROW_HEIGHT = 41;
+const visibleArea = window.innerHeight - 200 - 140;
+const BATCH_SIZE = Math.max(20, Math.ceil(visibleArea / ROW_HEIGHT) + 5);
+let allItems = [];
+let totalItems = 0;
+let currentPage = 0;   // last page fetched (0 = none yet)
+let perPage = BATCH_SIZE;
+let fetching = false;
+let fullyLoaded = false;
+
+// --- Bulk selection state ---
+// Set of rating_key strings currently selected. Persists across renders so
+// that loading more items doesn't clear prior selection.
+const selected = new Set();
+// Track the row the mouse is over (for the `x` keyboard shortcut).
+let hoveredRatingKey = null;
+
+function formatBytes(bytes) {
+  if (!bytes || bytes <= 0) return '-';
+  if (bytes >= 1099511627776) return (bytes / 1099511627776).toFixed(1) + ' TB';
+  if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' GB';
+  if (bytes >= 1048576) return (bytes / 1048576).toFixed(1) + ' MB';
+  return (bytes / 1024).toFixed(0) + ' KB';
+}
+
+// Rule's keep-collection target for the per-item "Add to keep collection"
+// button. First entry of the rule's protected_collections list wins;
+// remains null if the rule has none configured, in which case the button
+// is not rendered on each row. mediaServerLabel holds the rule's library
+// source ("Plex" / "Jellyfin") for the tooltip.
+let keepCollectionName = null;
+let mediaServerLabel = 'Plex';
+// Set of rating_keys (strings) currently in the rule's first protected
+// collection. Fetched once at page load; used to render the +Collection
+// button in its toggled (✓ Added) state. Mutated optimistically on add/remove.
+const keepMembers = new Set();
+// --- Watchlist state, keyed by Seerr user id ---
+// Map<userId:number, Set<tmdbId:number>>. Today populated only for the
+// admin user (single entry); the data shape already supports per-user
+// buckets so a future auth/user-picker layer can populate multiple without
+// any change to the toggle button code.
+const watchlistByUser = new Map();
+// Which user the UI currently represents. null = "the user that owns the
+// MCM Seerr API key" (resolved server-side). When the app grows per-user
+// sessions this will be set from the signed-in user; the +Watchlist button
+// reads/writes this user's bucket.
+let currentWatchlistUserId = null;
+// True once the initial fetch has landed so the row renderer can draw the
+// real state. Before then we render the neutral "+Watchlist" state.
+let watchlistReady = false;
+
+function watchlistBucket(userId) {
+  const key = userId == null ? '__current__' : Number(userId);
+  let bucket = watchlistByUser.get(key);
+  if (!bucket) {
+    bucket = new Set();
+    watchlistByUser.set(key, bucket);
+  }
+  return bucket;
+}
+
+function isOnWatchlist(tmdbId, userId = currentWatchlistUserId) {
+  return watchlistBucket(userId).has(Number(tmdbId));
+}
+
+function setWatchlistMembership(tmdbId, onList, userId = currentWatchlistUserId) {
+  const bucket = watchlistBucket(userId);
+  if (onList) bucket.add(Number(tmdbId));
+  else bucket.delete(Number(tmdbId));
+}
+
+async function loadWatchlistMembers(userId = currentWatchlistUserId) {
+  const qs = userId != null ? `?user_id=${encodeURIComponent(userId)}` : '';
+  try {
+    const resp = await fetch(`/api/items/watchlist-members${qs}`);
+    if (!resp.ok) return;
+    const data = await resp.json();
+    const bucket = watchlistBucket(userId);
+    bucket.clear();
+    for (const t of (data.tmdb_ids || [])) bucket.add(Number(t));
+    // Cache the resolved uid so subsequent writes can target it explicitly
+    // once the app actually represents a specific user.
+    if (userId == null && data.user_id != null) {
+      // Mirror the admin bucket under the resolved numeric uid too so the
+      // UI can lookup either way.
+      const resolved = watchlistBucket(data.user_id);
+      for (const t of bucket) resolved.add(t);
+    }
+  } catch (_) {}
+}
+
+// Pipeline step types that apply to real media. Used by the Run button's
+// smart default: if the rule has any destructive step, clicking Run goes
+// dry-first; otherwise it fires live immediately.
+const DESTRUCTIVE_TYPES = new Set(['delete', 'delete_files', 'unmonitor', 'import_exclusion', 'downgrade_quality']);
+let rulePipeline = [];
+function ruleHasDestructiveActions() {
+  return (rulePipeline || []).some(s => DESTRUCTIVE_TYPES.has(s && s.type));
+}
+function defaultRunMode() {
+  return ruleHasDestructiveActions() ? 'dry' : 'live';
+}
+
+// Load config for header badges
+fetch(`/api/collections/${colName}/config`)
+  .then(r => r.ok ? r.json() : null)
+  .then(cfg => {
+    if (!cfg) return;
+    const badges = document.getElementById('col-badges');
+    const action = cfg.action || 'none';
+    const grace = cfg.grace_days != null ? cfg.grace_days : '?';
+    const enabled = cfg.enabled !== false;
+    badges.innerHTML = [
+      `<span class="inline-flex px-2 py-0.5 rounded-md text-xs font-semibold bg-zinc-500/15 text-zinc-400">${action}</span>`,
+      `<span class="inline-flex px-2 py-0.5 rounded-md text-xs font-semibold bg-zinc-500/15 text-zinc-400">${grace}d grace</span>`,
+      enabled
+        ? '<span class="inline-flex px-2 py-0.5 rounded-md text-xs font-semibold bg-emerald-500/15 text-emerald-500">Enabled</span>'
+        : '<span class="inline-flex px-2 py-0.5 rounded-md text-xs font-semibold bg-rose-500/15 text-rose-500">Disabled</span>',
+    ].join(' ');
+
+    // Capture the rule's first protected collection name so the row-level
+    // "Add to keep collection" button can render and call the backend.
+    let criteria = cfg.criteria || {};
+    if (typeof criteria === 'string') {
+      try { criteria = JSON.parse(criteria); } catch (_) { criteria = {}; }
+    }
+    const cols = (criteria && criteria.protected_collections) || [];
+    keepCollectionName = cols.length > 0 ? cols[0] : null;
+    const src = (criteria && criteria.library_source) || 'plex';
+    mediaServerLabel = src === 'jellyfin' ? 'Jellyfin' : 'Plex';
+    rulePipeline = (criteria && criteria.action_pipeline) || [];
+    updateRunButtonTooltip();
+    // Fetch the current members of the keep collection so rows can render
+    // the +Collection button in its toggled state.
+    if (keepCollectionName) {
+      fetch(`/api/collections/${colName}/keep-members`)
+        .then(r => r.ok ? r.json() : null)
+        .then(data => {
+          if (!data || !Array.isArray(data.members)) return;
+          keepMembers.clear();
+          for (const k of data.members) keepMembers.add(String(k));
+          if (typeof render === 'function' && Array.isArray(allItems) && allItems.length > 0) {
+            render();
+          }
+        })
+        .catch(() => {});
+    }
+    // Fetch the current-user's Seerr watchlist (admin by default) so rows
+    // can render the +Watchlist toggle in its initial state. Keyed by user
+    // id under the hood, so per-user work is additive later.
+    loadWatchlistMembers(currentWatchlistUserId).finally(() => {
+      watchlistReady = true;
+      if (typeof render === 'function' && Array.isArray(allItems) && allItems.length > 0) {
+        render();
+      }
+    });
+    // Re-render the table if items already rendered (race between fetches).
+    if (typeof render === 'function' && Array.isArray(allItems) && allItems.length > 0) {
+      render();
+    }
+  });
+
+// Populate the search box from URL state on load.
+document.getElementById('search-box').value = currentSearch;
+
+// Search debounce - reset and re-fetch from page 1
+document.getElementById('search-box').addEventListener('input', function() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => {
+    currentSearch = this.value;
+    // Replace rather than push so typing a query doesn't flood the history
+    // stack; the user can still back-button out of the Rule Items page.
+    writeURLState({ replace: true });
+    // With a non-empty query, load the full set so search hits every item
+    // (otherwise a partial match could be hidden in the unloaded tail).
+    if (currentSearch.trim()) {
+      resetAndFetch({ loadAllAfter: true });
+    } else {
+      resetAndFetch();
+    }
+  }, 300);
+});
+
+function toggleSort(col) {
+  if (currentSort === col) {
+    currentSortDir = currentSortDir === 'asc' ? 'desc' : 'asc';
+  } else {
+    currentSort = col;
+    currentSortDir = 'asc';
+  }
+  writeURLState();
+  resetAndFetch();
+}
+
+// --- Filter pills ---
+// "All", "Staged", "Actioned" hit the backend via ?status=. "Kept" and
+// "Force delete" are override-based (orthogonal to status): the server returns
+// items at any status and the client filters to those with override === 'keep'
+// / 'delete'. This means counts for override filters reflect what's loaded,
+// not the full backend total, so we hint the user to Load all for a complete
+// picture.
+function filterToQuery(f) {
+    // Returns { status, clientOverride } for the given filter name.
+    //   status: value passed as ?status= to the API (all|staged|actioned).
+    //   clientOverride: if set, filter loaded items to override === this.
+    switch (f) {
+        case 'staged':       return { status: 'staged',   clientOverride: null };
+        case 'actioned':     return { status: 'actioned', clientOverride: null };
+        case 'kept':         return { status: 'all',      clientOverride: 'keep' };
+        case 'force-delete': return { status: 'all',      clientOverride: 'delete' };
+        case 'all':
+        default:             return { status: 'all',      clientOverride: null };
+    }
+}
+
+function setFilter(f) {
+    if (!VALID_FILTERS.has(f)) f = 'all';
+    if (f === currentFilter) return;
+    currentFilter = f;
+    writeURLState();
+    updateFilterPillsUI();
+    // Clear selection when switching filters - prior selection may be
+    // invisible under the new filter and that confuses the bulk bar.
+    if (selected.size) {
+        selected.clear();
+        renderBulkBar();
+    }
+    resetAndFetch();
+}
+
+function updateFilterPillsUI() {
+    document.querySelectorAll('.filter-pill').forEach(btn => {
+        const active = btn.dataset.filter === currentFilter;
+        btn.setAttribute('aria-selected', active ? 'true' : 'false');
+    });
+}
+
+document.querySelectorAll('.filter-pill').forEach(btn => {
+    btn.addEventListener('click', () => setFilter(btn.dataset.filter));
+});
+updateFilterPillsUI();
+
+// Visible subset after client-side filtering (used for counts + render).
+function visibleItems() {
+    const { clientOverride } = filterToQuery(currentFilter);
+    if (!clientOverride) return allItems;
+    return allItems.filter(it => it.override === clientOverride);
+}
+
+function sortArrow(col) {
+  const active = currentSort === col;
+  const cls = active ? 'text-zinc-100' : 'text-zinc-600';
+  const arrow = currentSortDir === 'asc' ? '&#9650;' : '&#9660;';
+  return `<span class="ml-1 text-[0.65rem] ${cls}">${active ? arrow : '&#9650;'}</span>`;
+}
+
+// Reset scroll state and fetch from the beginning. If opts.loadAllAfter is
+// set, kick off loadAll() after the initial page lands so every item is
+// available for client-side matching (needed for the search box).
+function resetAndFetch(opts) {
+  allItems = [];
+  totalItems = 0;
+  currentPage = 0;
+  fullyLoaded = false;
+  fetching = false;
+  const loadAllAfter = !!(opts && opts.loadAllAfter);
+  if (loadAllAfter) {
+    initialLoad().then(() => {
+      if (!fullyLoaded) loadAll();
+    }).catch(() => {});
+  } else {
+    initialLoad();
+  }
+}
+
+// Fetch a single page from the API
+async function fetchPage(page) {
+  const { status } = filterToQuery(currentFilter);
+  const params = new URLSearchParams({
+    page, per_page: perPage,
+    sort: currentSort, sort_dir: currentSortDir,
+    status,
+  });
+  if (currentSearch.trim()) params.set('search', currentSearch.trim());
+
+  const resp = await fetch(`/api/collections/${colName}?${params}`);
+  if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+  return resp.json();
+}
+
+// Priority order for picking the single "most informative" reason an item is
+// a removal candidate. Earlier entries win over later ones.
+const REASON_PRIORITY = [
+  'never_watched',
+  'show_ended',
+  'not_watched_recently',
+  'old_season',
+  'old_content',
+  'watch_ratio_low',
+  'low_rating',
+  'file_size_min',
+  'release_year_before',
+];
+
+// Formatters turn a rule result into a short human sentence. Each may be a
+// string (static) or a function(detail) -> string.
+// Pull "N days ago" and "(threshold: Nd)" out of a backend detail string.
+function _parseDaysAndThreshold(d) {
+  if (!d) return {};
+  const days = d.match(/(\d+)\s+days?\s+ago/i);
+  const thresh = d.match(/threshold:?\s*(\d+)\s*d/i);
+  return { days: days ? days[1] : null, threshold: thresh ? thresh[1] : null };
+}
+
+const REASON_FORMATTERS = {
+  never_watched: 'Never watched',
+  show_ended: 'Show ended',
+  not_watched_recently: d => {
+    if (!d) return 'Not watched recently';
+    const { days, threshold } = _parseDaysAndThreshold(d);
+    // "Never watched, added 437 days ago (threshold: 90d)"
+    if (/^never watched/i.test(d)) {
+      if (days && threshold) return `Never watched (added ${days}d ago, threshold ${threshold}d)`;
+      if (days) return `Never watched (added ${days}d ago)`;
+      return 'Never watched';
+    }
+    if (days && threshold) return `Not watched in ${days}d (threshold ${threshold}d)`;
+    if (days) return `Not watched in ${days}d`;
+    return 'Not watched recently';
+  },
+  old_season: d => d || 'Older season',
+  old_content: d => {
+    if (!d) return 'Added long ago';
+    const { days, threshold } = _parseDaysAndThreshold(d);
+    if (days && threshold) return `Added ${days}d ago (threshold ${threshold}d)`;
+    if (days) return `Added ${days}d ago`;
+    return 'Added long ago';
+  },
+  watch_ratio_low: 'Left unfinished',
+  low_rating: d => d || 'Low rating',
+  file_size_min: d => d || 'Large file',
+  release_year_before: d => d || 'Old release year',
+};
+
+function buildReason(itemRules) {
+  if (!itemRules || !itemRules.length) return '';
+  // Index passed rules by name for priority lookup
+  const byName = {};
+  for (const r of itemRules) {
+    if (r.passed && !byName[r.rule_name]) byName[r.rule_name] = r;
+  }
+  for (const name of REASON_PRIORITY) {
+    const r = byName[name];
+    if (!r) continue;
+    const fmt = REASON_FORMATTERS[name];
+    return typeof fmt === 'function' ? fmt(r.detail) : fmt;
+  }
+  return '';
+}
+
+// Escape text for safe interpolation into innerHTML. Titles occasionally
+// contain characters like `<`, `>`, `&` that would otherwise break the
+// markup; rating_keys are always numeric but escape anyway.
+function escHTML(s) {
+  if (s == null) return '';
+  return String(s).replace(/[&<>"']/g, c => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+  }[c]));
+}
+
+// Render all accumulated items
+function renderAll() {
+  const target = document.getElementById('col-data');
+  const summary = document.getElementById('col-summary');
+
+  const shown = visibleItems();
+  const { clientOverride } = filterToQuery(currentFilter);
+  // Count text:
+  //  - server-side status filters (all/staged/actioned): use the API's total.
+  //  - client-side override filters (kept/force-delete): show
+  //    "N matching / M loaded" because server total doesn't reflect the
+  //    override filter; user may need Load all for a full picture.
+  if (clientOverride) {
+    summary.textContent = fullyLoaded
+      ? shown.length + ' items (' + currentFilter + ')'
+      : shown.length + ' matching / ' + allItems.length + ' loaded - Load all for a complete count';
+  } else {
+    summary.textContent = fullyLoaded
+      ? totalItems + ' items'
+      : 'Showing ' + allItems.length + ' of ' + totalItems + ' items';
+  }
+
+  // Toggle the header-level Load all shortcut
+  const hdrLoadAll = document.getElementById('hdr-load-all-btn');
+  if (hdrLoadAll) {
+    if (!fullyLoaded && totalItems > allItems.length) {
+      hdrLoadAll.classList.remove('hidden');
+      hdrLoadAll.textContent = 'Load all (' + (totalItems - allItems.length) + ')';
+    } else {
+      hdrLoadAll.classList.add('hidden');
+    }
+  }
+
+  const filterActive = currentFilter !== 'all';
+  if (shown.length === 0 && fullyLoaded) {
+    if (totalItems === 0 && !currentSearch.trim() && !filterActive) {
+      target.innerHTML = renderEmptyItemsState();
+      wireEmptyItemsState();
+    } else if (currentSearch.trim()) {
+      target.innerHTML = '<p class="text-zinc-400 text-sm">No items match your search.</p>';
+    } else if (filterActive) {
+      target.innerHTML = `<p class="text-zinc-400 text-sm">No items match the <span class="text-zinc-200">${escHTML(currentFilter)}</span> filter.</p>`;
+    } else {
+      target.innerHTML = renderEmptyItemsState();
+      wireEmptyItemsState();
+    }
+    summary.textContent = '0 items';
+    updateLoadZone();
+    renderBulkBar();
+    return;
+  }
+
+  const fmtDate = d => d ? new Date(d).toLocaleDateString(undefined, {month:'short', day:'numeric', year:'numeric'}) : '--';
+
+  const sortCols = [
+    { key: 'title', label: 'Title' },
+    { key: 'first_seen', label: 'Added' },
+    { key: 'grace_expires', label: 'Action Date' },
+    { key: 'size_bytes', label: 'Size' },
+  ];
+
+  // How many of the currently-visible items are already selected? Drives
+  // the "select all" header checkbox state (indeterminate if partial).
+  const visibleKeys = shown.map(it => String(it.rating_key));
+  const visibleSelectedCount = visibleKeys.filter(rk => selected.has(rk)).length;
+  const allVisibleSelected = visibleSelectedCount === visibleKeys.length && visibleKeys.length > 0;
+  const someVisibleSelected = visibleSelectedCount > 0 && !allVisibleSelected;
+
+  let html = '<div class="overflow-visible"><table class="w-full text-sm"><thead><tr class="border-b border-zinc-800">';
+  // Select-all header checkbox
+  html += `<th class="py-3 px-3 w-8">
+    <input type="checkbox" class="select-all-check" id="select-all-check"
+           ${allVisibleSelected ? 'checked' : ''} aria-label="Select all visible">
+  </th>`;
+  for (const col of sortCols) {
+    const active = currentSort === col.key ? ' text-zinc-100' : ' text-zinc-400';
+    html += `<th class="text-left py-3 px-3 font-medium cursor-pointer select-none whitespace-nowrap hover:text-zinc-200${active}" onclick="toggleSort('${col.key}')">${col.label}${sortArrow(col.key)}</th>`;
+  }
+  html += '<th class="text-left py-3 px-3 font-medium text-zinc-400">Reason</th>';
+  html += '<th class="py-3 px-3"></th>';
+  html += '</tr></thead><tbody class="divide-y divide-zinc-800/50">';
+
+  for (const item of shown) {
+    const rk = String(item.rating_key);
+    const isSelected = selected.has(rk);
+    const size = formatBytes(item.size_bytes);
+    const addedDate = fmtDate(item.first_seen);
+    const graceDate = fmtDate(item.grace_expires);
+    const graceExpired = item.grace_expires && new Date(item.grace_expires) < new Date();
+
+    const posterImg = `<img src="/api/items/${rk}/poster?size=sm" loading="lazy" decoding="async" alt="" class="shrink-0 rounded w-10 h-[60px] object-cover bg-zinc-800" onerror="this.style.visibility='hidden'">`;
+    let titleLink;
+    if (item.title) {
+      titleLink = `<a href="/items/${rk}" class="text-sky-500 hover:text-sky-400">${escHTML(item.title)}</a>`;
+    } else {
+      titleLink = `<a href="/items/${rk}" class="text-zinc-500 hover:text-zinc-400">Unknown <span class="text-xs">(${escHTML(rk)})</span></a>`;
+    }
+    // shieldIcon is concatenated inline with titleLink below, so it sits next to the title text.
+
+    const reasonText = buildReason(item.rules);
+    const reasonCell = reasonText
+      ? `<span class="text-zinc-300">${escHTML(reasonText)}</span>`
+      : `<span class="text-zinc-500 italic">-</span>`;
+
+    const keepBtn = item.override
+      ? `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold bg-amber-500/15 text-amber-500">${escHTML(item.override)}<button type="button" class="ml-1 text-amber-300 hover:text-amber-100 leading-none" title="Clear override" onclick="event.stopPropagation(); clearOverride('${rk}', this)" aria-label="Clear override">&times;</button></span>`
+      : `<button class="px-2 py-0.5 text-xs rounded-md border border-zinc-600 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors" title="Protect this item from all rule actions until you clear the override." onclick="event.stopPropagation(); quickKeep('${rk}', this)">Keep</button>`;
+    // Button to toggle membership in the rule's keep collection. For season
+    // items the backend maps to the parent show key, so that's what we also
+    // track locally. Green "✓ Added" state when present; click to remove.
+    let addToKeepBtn = '';
+    if (keepCollectionName) {
+      const targetKey = String(item.show_rating_key || rk);
+      const isIn = keepMembers.has(targetKey);
+      if (isIn) {
+        addToKeepBtn = `<button class="keep-col-btn ml-1 px-2 py-0.5 text-xs rounded-md border border-emerald-500/50 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors" title="Remove from ${mediaServerLabel} collection '${escHTML(keepCollectionName)}'" data-state="in" onclick="event.stopPropagation(); toggleKeepCollection('${rk}', '${targetKey}', this)">&check; Added</button>`;
+      } else {
+        addToKeepBtn = `<button class="keep-col-btn ml-1 px-2 py-0.5 text-xs rounded-md border border-zinc-600 text-zinc-400 hover:bg-indigo-500/20 hover:border-indigo-500/60 hover:text-indigo-300 transition-colors" title="Add to ${mediaServerLabel} collection '${escHTML(keepCollectionName)}'" data-state="out" onclick="event.stopPropagation(); toggleKeepCollection('${rk}', '${targetKey}', this)">+Collection</button>`;
+      }
+    }
+    // +Watchlist button: toggles the item's TMDB id on the current user's
+    // Seerr watchlist. Renders only when the item has a TMDB id (required
+    // for the Seerr API call). The membership check goes through
+    // isOnWatchlist() so a future per-user layer just changes the
+    // current-user resolution, not the button code.
+    let watchlistBtn = '';
+    if (item.tmdb_id) {
+      const tmdb = Number(item.tmdb_id);
+      const onList = isOnWatchlist(tmdb);
+      if (onList) {
+        watchlistBtn = `<button class="wl-btn ml-1 px-2 py-0.5 text-xs rounded-md border border-sky-500/50 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20 transition-colors" title="Remove from Seerr watchlist" data-state="in" onclick="event.stopPropagation(); toggleWatchlist('${rk}', ${tmdb}, this)">&check; Watchlisted</button>`;
+      } else {
+        watchlistBtn = `<button class="wl-btn ml-1 px-2 py-0.5 text-xs rounded-md border border-zinc-600 text-zinc-400 hover:bg-sky-500/20 hover:border-sky-500/60 hover:text-sky-300 transition-colors" title="Add to Seerr watchlist" data-state="out" onclick="event.stopPropagation(); toggleWatchlist('${rk}', ${tmdb}, this)">+Watchlist</button>`;
+      }
+    }
+    const overrideOrKeep = keepBtn + addToKeepBtn + watchlistBtn;
+
+    // Shield icon inline with title when item has an active override
+    const shieldIcon = item.override
+      ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="inline-block align-[-2px] ml-1 text-amber-400" title="Override active: ${escHTML(item.override)}"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>`
+      : '';
+
+    const graceCls = graceExpired ? 'text-rose-500' : 'text-zinc-300';
+    const rowCls = isSelected ? 'row-selected' : '';
+
+    html += `<tr class="hover:bg-zinc-800/50 transition-colors ${rowCls}" data-rating-key="${escHTML(rk)}">
+      <td class="py-2.5 px-3">
+        <input type="checkbox" class="item-check" data-rating-key="${escHTML(rk)}" ${isSelected ? 'checked' : ''} aria-label="Select item">
+      </td>
+      <td class="py-2.5 px-3 text-zinc-100"><div class="flex items-center gap-3">${posterImg}<span>${titleLink}${shieldIcon}</span></div></td>
+      <td class="py-2.5 px-3 text-zinc-400">${addedDate}</td>
+      <td class="py-2.5 px-3 ${graceCls}">${graceDate}</td>
+      <td class="py-2.5 px-3 text-zinc-400 tabular-nums">${size}</td>
+      <td class="py-2.5 px-3">${reasonCell}</td>
+      <td class="py-2.5 px-3">${overrideOrKeep}</td>
+    </tr>`;
+  }
+  html += '</tbody></table></div>';
+  target.innerHTML = html;
+
+  // Wire up the select-all indeterminate state + listener (can't use HTML
+  // attribute for `indeterminate`, must set property).
+  const selAll = document.getElementById('select-all-check');
+  if (selAll) {
+    selAll.indeterminate = someVisibleSelected;
+    selAll.addEventListener('change', () => toggleSelectAllVisible(selAll.checked));
+  }
+
+  // Wire row checkboxes + hover tracking for keyboard shortcuts. Using
+  // event delegation would be cheaper but there are only ~BATCH_SIZE rows
+  // visible at once, so per-row wiring is simpler and cheap enough.
+  target.querySelectorAll('tr[data-rating-key]').forEach(tr => {
+    const rk = tr.getAttribute('data-rating-key');
+    tr.addEventListener('mouseenter', () => { hoveredRatingKey = rk; });
+    tr.addEventListener('mouseleave', () => {
+      if (hoveredRatingKey === rk) hoveredRatingKey = null;
+    });
+  });
+  target.querySelectorAll('input.item-check').forEach(cb => {
+    cb.addEventListener('change', () => {
+      const rk = cb.getAttribute('data-rating-key');
+      if (cb.checked) selected.add(rk);
+      else            selected.delete(rk);
+      // Just toggle the row class + update bulk bar rather than re-rendering
+      // the whole table (keeps scroll position + avoids flicker).
+      const tr = cb.closest('tr');
+      if (tr) tr.classList.toggle('row-selected', cb.checked);
+      syncSelectAllHeader();
+      renderBulkBar();
+    });
+  });
+
+  updateLoadZone();
+  renderBulkBar();
+}
+
+// Load bar UI
+function updateLoadZone() {
+  const bar = document.getElementById('load-bar');
+  const status = document.getElementById('load-status');
+  const moreBtn = document.getElementById('load-more-btn');
+  const allBtn = document.getElementById('load-all-btn');
+  const spacer = document.getElementById('load-bar-spacer');
+
+  if (fullyLoaded || allItems.length >= totalItems) {
+    fullyLoaded = true;
+    bar.classList.add('hidden');
+    spacer.style.display = 'none';
+    return;
+  }
+
+  bar.classList.remove('hidden');
+  spacer.style.display = '';
+  const remaining = totalItems - allItems.length;
+  status.textContent = allItems.length + ' of ' + totalItems + ' loaded';
+  moreBtn.disabled = false;
+  moreBtn.textContent = 'Load more (' + Math.min(perPage, remaining) + ')';
+  allBtn.disabled = false;
+  allBtn.textContent = 'Load all (' + remaining + ')';
+}
+
+// Fetch next batch and re-render
+async function loadMore() {
+  if (fetching || fullyLoaded) return;
+  fetching = true;
+  const moreBtn = document.getElementById('load-more-btn');
+  moreBtn.setAttribute('aria-busy', 'true');
+  moreBtn.disabled = true;
+
+  try {
+    const nextPage = currentPage + 1;
+    const data = await fetchPage(nextPage);
+
+    // Update breadcrumb/title on first load
+    if (currentPage === 0 && data.collection) {
+      document.getElementById('col-title').textContent = data.collection;
+      document.getElementById('breadcrumb-name').textContent = data.collection;
+    }
+
+    totalItems = data.total;
+    currentPage = nextPage;
+
+    if (data.items && data.items.length > 0) {
+      allItems = allItems.concat(data.items);
+    }
+    if (allItems.length >= totalItems || !data.items || data.items.length < perPage) {
+      fullyLoaded = true;
+    }
+    renderAll();
+  } catch (err) {
+    document.getElementById('load-status').textContent = 'Error: ' + err.message;
+  } finally {
+    fetching = false;
+    moreBtn.removeAttribute('aria-busy');
+    moreBtn.disabled = false;
+  }
+}
+
+// Load everything
+async function loadAll() {
+  if (fetching || fullyLoaded) return;
+  fetching = true;
+  const allBtn = document.getElementById('load-all-btn');
+  allBtn.setAttribute('aria-busy', 'true');
+  allBtn.disabled = true;
+  document.getElementById('load-status').textContent = 'Loading all items...';
+
+  try {
+    while (!fullyLoaded) {
+      const nextPage = currentPage + 1;
+      const data = await fetchPage(nextPage);
+
+      if (currentPage === 0 && data.collection) {
+        document.getElementById('col-title').textContent = data.collection;
+        document.getElementById('breadcrumb-name').textContent = data.collection;
+      }
+
+      totalItems = data.total;
+      currentPage = nextPage;
+
+      if (data.items && data.items.length > 0) {
+        allItems = allItems.concat(data.items);
+        document.getElementById('load-status').textContent = 'Loading... ' + allItems.length + ' of ' + totalItems;
+      }
+      if (allItems.length >= totalItems || !data.items || data.items.length === 0) {
+        fullyLoaded = true;
+      }
+    }
+    renderAll();
+  } catch (err) {
+    document.getElementById('load-status').textContent = 'Error: ' + err.message;
+  } finally {
+    fetching = false;
+    allBtn.removeAttribute('aria-busy');
+    allBtn.disabled = false;
+  }
+}
+
+// Scroll-to-load
+let scrollCooldown = false;
+window.addEventListener('scroll', () => {
+  if (fetching || fullyLoaded || scrollCooldown) return;
+  const distFromBottom = document.documentElement.scrollHeight - window.scrollY - window.innerHeight;
+  if (distFromBottom < 300) {
+    scrollCooldown = true;
+    loadMore().finally(() => {
+      setTimeout(() => { scrollCooldown = false; }, 500);
+    });
+  }
+});
+
+// Re-add the pulse class to play the animation again (removing and
+// re-adding forces a restart of the CSS animation).
+function pulseRow(ratingKey) {
+  const tr = document.querySelector(`tr[data-rating-key="${CSS.escape(String(ratingKey))}"]`);
+  if (!tr) return;
+  tr.classList.remove('row-pulse');
+  // Force reflow so the animation actually replays.
+  void tr.offsetWidth;
+  tr.classList.add('row-pulse');
+  setTimeout(() => tr.classList.remove('row-pulse'), 900);
+}
+
+// Update the in-memory item record so re-renders reflect the new override
+// without a round-trip. Returns true if an item was found and mutated.
+function patchItemOverride(ratingKey, value) {
+  let patched = false;
+  for (const it of allItems) {
+    if (String(it.rating_key) === String(ratingKey)) {
+      it.override = value;
+      patched = true;
+    }
+  }
+  return patched;
+}
+
+async function toggleWatchlist(ratingKey, tmdbId, btn, userId = currentWatchlistUserId) {
+  const state = btn.getAttribute('data-state');
+  const adding = state !== 'in';
+  btn.disabled = true;
+  const originalHtml = btn.innerHTML;
+  btn.innerHTML = '...';
+  try {
+    const url = adding
+      ? `/api/items/${ratingKey}/watchlist`
+      : `/api/items/${ratingKey}/watchlist${userId != null ? `?user_id=${encodeURIComponent(userId)}` : ''}`;
+    const opts = {
+      method: adding ? 'POST' : 'DELETE',
+      headers: {'Content-Type': 'application/json'},
+    };
+    if (adding) opts.body = JSON.stringify(userId != null ? { user_id: userId } : {});
+    const resp = await fetch(url, opts);
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed');
+    }
+    // Resolve the authoritative uid the server wrote to and update its
+    // bucket, plus the "current user" alias so isOnWatchlist() stays
+    // correct regardless of which key the caller used.
+    const data = await resp.json().catch(() => ({}));
+    const resolvedUid = data.user_id ?? userId;
+    setWatchlistMembership(tmdbId, adding, userId);
+    if (resolvedUid != null && resolvedUid !== userId) {
+      setWatchlistMembership(tmdbId, adding, resolvedUid);
+    }
+    if (adding) {
+      btn.className = 'wl-btn ml-1 px-2 py-0.5 text-xs rounded-md border border-sky-500/50 bg-sky-500/10 text-sky-300 hover:bg-sky-500/20 transition-colors';
+      btn.setAttribute('data-state', 'in');
+      btn.title = 'Remove from Seerr watchlist';
+      btn.innerHTML = '&check; Watchlisted';
+      showToast('Added to watchlist', 'success');
+    } else {
+      btn.className = 'wl-btn ml-1 px-2 py-0.5 text-xs rounded-md border border-zinc-600 text-zinc-400 hover:bg-sky-500/20 hover:border-sky-500/60 hover:text-sky-300 transition-colors';
+      btn.setAttribute('data-state', 'out');
+      btn.title = 'Add to Seerr watchlist';
+      btn.innerHTML = '+Watchlist';
+      showToast('Removed from watchlist', 'info');
+    }
+    pulseRow(ratingKey);
+    btn.disabled = false;
+  } catch (e) {
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+    showToast('Failed: ' + e.message, 'error');
+  }
+}
+
+async function toggleKeepCollection(ratingKey, targetKey, btn) {
+  const state = btn.getAttribute('data-state');
+  const adding = state !== 'in';
+  btn.disabled = true;
+  const originalHtml = btn.innerHTML;
+  btn.innerHTML = '...';
+  try {
+    const url = `/api/items/${ratingKey}/${adding ? 'add-to-keep' : 'keep-collection'}`;
+    const resp = await fetch(url, {
+      method: adding ? 'POST' : 'DELETE',
+      headers: {'Content-Type': 'application/json'},
+      body: adding ? JSON.stringify({}) : undefined,
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      throw new Error(err.detail || 'Failed');
+    }
+    const data = await resp.json();
+    if (adding) {
+      keepMembers.add(String(targetKey));
+      btn.className = 'keep-col-btn ml-1 px-2 py-0.5 text-xs rounded-md border border-emerald-500/50 bg-emerald-500/10 text-emerald-400 hover:bg-emerald-500/20 transition-colors';
+      btn.setAttribute('data-state', 'in');
+      btn.title = `Remove from ${mediaServerLabel} collection '${keepCollectionName}'`;
+      btn.innerHTML = '&check; Added';
+      showToast(`Added to '${data.collection}'`, 'success');
+    } else {
+      keepMembers.delete(String(targetKey));
+      btn.className = 'keep-col-btn ml-1 px-2 py-0.5 text-xs rounded-md border border-zinc-600 text-zinc-400 hover:bg-indigo-500/20 hover:border-indigo-500/60 hover:text-indigo-300 transition-colors';
+      btn.setAttribute('data-state', 'out');
+      btn.title = `Add to ${mediaServerLabel} collection '${keepCollectionName}'`;
+      btn.innerHTML = '+Collection';
+      showToast(`Removed from '${data.collection}'`, 'info');
+    }
+    pulseRow(ratingKey);
+    btn.disabled = false;
+  } catch (e) {
+    btn.disabled = false;
+    btn.innerHTML = originalHtml;
+    showToast('Failed: ' + e.message, 'error');
+  }
+}
+
+async function quickKeep(ratingKey, btn) {
+  btn.disabled = true;
+  btn.textContent = '...';
+  try {
+    const resp = await fetch(`/api/items/${ratingKey}/action`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({action: 'keep'}),
+    });
+    if (!resp.ok) throw new Error('Failed');
+    btn.outerHTML = `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold bg-amber-500/15 text-amber-500">keep<button type="button" class="ml-1 text-amber-300 hover:text-amber-100 leading-none" title="Clear override" onclick="event.stopPropagation(); clearOverride('${ratingKey}', this)" aria-label="Clear override">&times;</button></span>`;
+    patchItemOverride(ratingKey, 'keep');
+    pulseRow(ratingKey);
+    showToast('Item marked as Keep', 'success');
+  } catch (e) {
+    btn.disabled = false;
+    btn.textContent = 'Keep';
+    showToast('Failed to set Keep', 'error');
+  }
+}
+
+async function clearOverride(ratingKey, btn) {
+  const pill = btn.closest('span');
+  if (pill) pill.style.opacity = '0.5';
+  try {
+    const resp = await fetch(`/api/items/${ratingKey}/action`, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({action: 'clear'}),
+    });
+    if (!resp.ok) throw new Error('Failed');
+    if (pill) {
+      pill.outerHTML = `<button class="px-2 py-0.5 text-xs rounded-md border border-zinc-600 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200 transition-colors" title="Protect this item from all rule actions until you clear the override." onclick="event.stopPropagation(); quickKeep('${ratingKey}', this)">Keep</button>`;
+    }
+    patchItemOverride(ratingKey, null);
+    pulseRow(ratingKey);
+    showToast('Override cleared', 'success');
+  } catch (e) {
+    if (pill) pill.style.opacity = '';
+    showToast('Failed to clear override', 'error');
+  }
+}
+
+// --- Bulk selection helpers ---
+
+function syncSelectAllHeader() {
+    const selAll = document.getElementById('select-all-check');
+    if (!selAll) return;
+    const shown = visibleItems().map(it => String(it.rating_key));
+    const selCount = shown.filter(rk => selected.has(rk)).length;
+    selAll.checked = selCount === shown.length && shown.length > 0;
+    selAll.indeterminate = selCount > 0 && selCount < shown.length;
+}
+
+function toggleSelectAllVisible(forceSelect) {
+    const shown = visibleItems().map(it => String(it.rating_key));
+    // When called from the header checkbox, `forceSelect` reflects its new
+    // state. When called from the keyboard shortcut we pass undefined and
+    // flip based on whether everything visible is already selected.
+    let shouldSelect;
+    if (typeof forceSelect === 'boolean') {
+        shouldSelect = forceSelect;
+    } else {
+        shouldSelect = !shown.every(rk => selected.has(rk));
+    }
+    for (const rk of shown) {
+        if (shouldSelect) selected.add(rk);
+        else              selected.delete(rk);
+    }
+    // Mirror state into the DOM without re-rendering the whole table.
+    document.querySelectorAll('input.item-check').forEach(cb => {
+        const rk = cb.getAttribute('data-rating-key');
+        const on = selected.has(rk);
+        cb.checked = on;
+        const tr = cb.closest('tr');
+        if (tr) tr.classList.toggle('row-selected', on);
+    });
+    syncSelectAllHeader();
+    renderBulkBar();
+}
+
+function toggleRowSelection(ratingKey) {
+    if (!ratingKey) return;
+    const rk = String(ratingKey);
+    if (selected.has(rk)) selected.delete(rk);
+    else                  selected.add(rk);
+    const cb = document.querySelector(`input.item-check[data-rating-key="${CSS.escape(rk)}"]`);
+    if (cb) {
+        cb.checked = selected.has(rk);
+        const tr = cb.closest('tr');
+        if (tr) tr.classList.toggle('row-selected', cb.checked);
+    }
+    syncSelectAllHeader();
+    renderBulkBar();
+}
+
+function cancelSelection() {
+    if (!selected.size) return;
+    selected.clear();
+    document.querySelectorAll('input.item-check').forEach(cb => {
+        cb.checked = false;
+        const tr = cb.closest('tr');
+        if (tr) tr.classList.remove('row-selected');
+    });
+    syncSelectAllHeader();
+    renderBulkBar();
+}
+
+function renderBulkBar() {
+    const bar = document.getElementById('bulk-bar');
+    const count = document.getElementById('bulk-count');
+    const n = selected.size;
+    if (!bar) return;
+    if (n === 0) {
+        bar.classList.add('hidden');
+        document.body.classList.remove('bulk-active');
+        return;
+    }
+    bar.classList.remove('hidden');
+    document.body.classList.add('bulk-active');
+    if (count) count.textContent = n + ' selected';
+}
+
+async function bulkAction(action) {
+    const keys = Array.from(selected);
+    if (!keys.length) return;
+    if (keys.length > 500) {
+        showToast('Too many items selected (max 500)', 'error');
+        return;
+    }
+    const keepBtn = document.getElementById('bulk-keep-btn');
+    const clearBtn = document.getElementById('bulk-clear-btn');
+    keepBtn.disabled = true; clearBtn.disabled = true;
+    try {
+        const resp = await fetch('/api/items/bulk-action', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({ action, rating_keys: keys }),
+        });
+        const data = await resp.json().catch(() => ({}));
+        if (!resp.ok) throw new Error(data.detail || `HTTP ${resp.status}`);
+
+        // Patch the local model so the next render reflects the change,
+        // pulse the affected rows, and clear the selection set.
+        const newVal = action === 'clear' ? null : action;
+        for (const rk of keys) {
+            patchItemOverride(rk, newVal);
+            pulseRow(rk);
+        }
+        const updated = (typeof data.updated === 'number') ? data.updated : keys.length;
+        showToast(`Updated ${updated} item${updated === 1 ? '' : 's'}`, 'success');
+        selected.clear();
+        // Wait for the pulse to finish before re-rendering so the animation
+        // is visible. Without this, the table re-renders immediately and
+        // the pulse never plays.
+        setTimeout(() => {
+            renderAll();
+        }, 850);
+    } catch (e) {
+        showToast('Bulk action failed: ' + e.message, 'error');
+    } finally {
+        keepBtn.disabled = false; clearBtn.disabled = false;
+    }
+}
+
+document.getElementById('bulk-keep-btn').addEventListener('click', () => bulkAction('keep'));
+document.getElementById('bulk-clear-btn').addEventListener('click', () => bulkAction('clear'));
+document.getElementById('bulk-cancel-btn').addEventListener('click', cancelSelection);
+
+// --- Keyboard shortcuts ---
+// Ignore shortcuts while the user is typing into a form field or has a
+// modifier held (Ctrl/Cmd/Alt) - those combinations belong to the
+// browser.
+function isTypingTarget(el) {
+    if (!el) return false;
+    const tag = el.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT') return true;
+    if (el.isContentEditable) return true;
+    return false;
+}
+
+document.addEventListener('keydown', (e) => {
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (isTypingTarget(e.target)) return;
+    if (e.key === 'x' || e.key === 'X') {
+        if (hoveredRatingKey) {
+            e.preventDefault();
+            toggleRowSelection(hoveredRatingKey);
+        }
+    } else if (e.key === 'a' || e.key === 'A') {
+        e.preventDefault();
+        toggleSelectAllVisible();
+    } else if (e.key === 'Escape') {
+        if (selected.size) {
+            e.preventDefault();
+            cancelSelection();
+        }
+    }
+});
+
+// Restore view when the user hits the back/forward button - re-read state
+// from URL and re-fetch if anything meaningful changed.
+window.addEventListener('popstate', () => {
+    const next = readURLState();
+    const changed = next.search !== currentSearch
+                 || next.sort   !== currentSort
+                 || next.dir    !== currentSortDir
+                 || next.filter !== currentFilter;
+    if (!changed) return;
+    currentSearch  = next.search;
+    currentSort    = next.sort;
+    currentSortDir = next.dir;
+    currentFilter  = next.filter;
+    document.getElementById('search-box').value = currentSearch;
+    updateFilterPillsUI();
+    cancelSelection();
+    resetAndFetch();
+});
+
+function renderEmptyItemsState() {
+  return `
+    <div class="text-center py-12 px-4 border-2 border-dashed border-zinc-700 rounded-lg max-w-2xl mx-auto">
+      <svg class="w-14 h-14 mx-auto mb-4 text-indigo-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <circle cx="11" cy="11" r="8"/>
+        <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+        <line x1="11" y1="8" x2="11" y2="14"/>
+        <line x1="8" y1="11" x2="14" y2="11"/>
+      </svg>
+      <h3 class="text-lg font-semibold text-zinc-100 mb-1">No items matched yet</h3>
+      <p class="text-zinc-400 text-sm mb-4">Items appear here once the rule has scanned your libraries and found media that fits the criteria.</p>
+      <p class="text-zinc-500 text-xs mb-6">If a dry run has never been executed, items will appear here after the first scan.</p>
+      <div class="flex gap-3 justify-center flex-wrap">
+        <button type="button" id="empty-scan-btn"
+                class="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold bg-indigo-500 hover:bg-indigo-400 text-white transition-colors">
+          Run a scan
+        </button>
+        <a href="/rules" class="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium border border-zinc-600 text-zinc-300 hover:bg-zinc-800 transition-colors">Back to Rules</a>
+      </div>
+    </div>`;
+}
+
+function wireEmptyItemsState() {
+  const btn = document.getElementById('empty-scan-btn');
+  if (btn) btn.addEventListener('click', triggerScan);
+}
+
+async function triggerScan() {
+  const btn = document.getElementById('empty-scan-btn');
+  if (btn) { btn.disabled = true; btn.textContent = 'Starting...'; }
+  showRunProgress({ phase: '', detail: 'Starting...', percent: 0, items_processed: 0, items_total: 0 }, true);
+  try {
+    const resp = await fetch(`/api/run?dry_run=true&rule=${encodeURIComponent(colName)}`, { method: 'POST' });
+    const d = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(d.detail || 'HTTP ' + resp.status);
+    if (d.status === 'already_running') {
+      showToast('Another run is in progress - wait for it to finish.', 'info');
+      startRunPolling(null);
+    } else {
+      startRunPolling(true);
+    }
+    if (btn) { btn.disabled = false; btn.textContent = 'Run a scan'; }
+  } catch (err) {
+    showToast('Failed to start scan: ' + err.message, 'error');
+    const el = document.getElementById('run-progress');
+    if (el) el.classList.add('hidden');
+    if (btn) { btn.disabled = false; btn.textContent = 'Run a scan'; }
+  }
+}
+
+// --- Per-rule Run (split button with smart default) ---
+// Primary click uses defaultRunMode() so rules with destructive actions
+// go dry-first. The caret menu exposes explicit Run dry / Run live.
+function updateRunButtonTooltip() {
+  const btn = document.getElementById('btn-run-rule');
+  if (!btn) return;
+  const mode = defaultRunMode();
+  btn.title = mode === 'dry'
+    ? 'Run - will default to DRY because this rule has destructive actions. Use the ▾ menu to force live.'
+    : 'Run - will run LIVE because the pipeline has no destructive actions.';
+}
+
+// --- Run progress banner ---
+// Same phase vocabulary as the Rules page so users get a consistent read.
+function phaseLabel(phase) {
+  const labels = {
+    fetching_plex: 'Fetching from Plex',
+    fetching_radarr: 'Fetching from Radarr',
+    fetching_sonarr: 'Fetching from Sonarr',
+    fetching_sessions: 'Fetching watch history',
+    fetching_overseerr: 'Fetching from Seerr',
+    fetching_jellyfin: 'Fetching from Jellyfin',
+    loading_db_plays: 'Loading watch history',
+    fetching_seasons: 'Fetching seasons',
+    fetching_ratings: 'Fetching ratings',
+    building_context: 'Building context',
+    processing_collection: 'Processing rule',
+    syncing_collections: 'Syncing collections',
+    executing_actions: 'Running actions',
+    syncing_users: 'Syncing users',
+    finalizing: 'Finalizing',
+  };
+  if (labels[phase]) return labels[phase];
+  if (!phase) return 'Starting';
+  return phase.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// `isDry`: true/false/null (null = unknown, pick a neutral palette).
+function showRunProgress(prog, isDry) {
+  const el = document.getElementById('run-progress');
+  if (!el) return;
+  el.classList.remove('hidden');
+  let wrapCls = 'mb-4 px-4 py-3 rounded-lg border';
+  let modeLine = '';
+  if (isDry === true) {
+    wrapCls += ' bg-indigo-500/10 border-indigo-500/20';
+    modeLine = `<span class="inline-flex px-2 py-0.5 rounded-md text-[0.65rem] font-semibold uppercase tracking-wide bg-indigo-500/20 text-indigo-300">Dry run - no changes</span>`;
+  } else if (isDry === false) {
+    wrapCls += ' bg-amber-500/10 border-amber-500/30';
+    modeLine = `<span class="inline-flex px-2 py-0.5 rounded-md text-[0.65rem] font-semibold uppercase tracking-wide bg-amber-500/20 text-amber-300">Live run - applying actions</span>`;
+  } else {
+    wrapCls += ' bg-zinc-700/30 border-zinc-600/40';
+    modeLine = `<span class="text-zinc-400 text-xs font-semibold">Run in progress</span>`;
+  }
+  el.className = wrapCls;
+  const spinnerColor = isDry === false ? 'text-amber-400' : 'text-indigo-400';
+  el.innerHTML = `
+    <div class="flex items-center gap-3 mb-1">
+      <svg class="w-5 h-5 shrink-0 animate-spin ${spinnerColor}" viewBox="0 0 24 24" fill="none">
+        <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-opacity="0.2"/>
+        <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+      </svg>
+      <div class="flex-1">
+        <div class="flex items-center gap-2 flex-wrap">
+          <strong class="text-zinc-100">${phaseLabel(prog.phase)}</strong>
+          ${modeLine}
+        </div>
+        <small class="block text-zinc-400">${prog.detail || 'Initializing...'}</small>
+      </div>
+      <small class="text-zinc-400">${prog.items_total > 0 ? prog.items_processed + ' / ' + prog.items_total : ''}</small>
+    </div>
+    <progress value="${prog.percent || 0}" max="100" class="w-full"></progress>`;
+}
+
+function showRunCompleted(lr, isDry) {
+  const el = document.getElementById('run-progress');
+  if (!el) return;
+  const label = isDry ? 'Dry run' : 'Run';
+  const added = lr.added || 0;
+  const removed = lr.removed || 0;
+  const parts = [];
+  if (added > 0) parts.push(added + ' item' + (added !== 1 ? 's' : '') + ' added');
+  if (removed > 0) parts.push(removed + ' item' + (removed !== 1 ? 's' : '') + ' removed');
+  const summary = parts.length ? parts.join(', ') : 'no changes';
+  el.className = 'mb-4 px-4 py-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20';
+  el.innerHTML = `
+    <div class="flex items-center gap-3">
+      <strong class="text-emerald-500">${label} completed</strong>
+      <span class="text-zinc-400">${summary}</span>
+      <a href="/logs?rule=${encodeURIComponent(colName)}" class="ml-auto text-xs text-indigo-400 hover:text-indigo-300">View logs</a>
+    </div>`;
+  showToast(`${label} completed: ${summary}`, 'success');
+}
+
+let runPollTimer = null;
+let currentRunIsDry = null;
+
+function startRunPolling(isDry) {
+  if (runPollTimer) return;
+  currentRunIsDry = isDry;
+  runPollTimer = setInterval(async () => {
+    try {
+      const r = await fetch('/api/run/progress');
+      const d = await r.json();
+      if (!d.running) {
+        clearInterval(runPollTimer);
+        runPollTimer = null;
+        const lr = d.last_result || {};
+        const doneDry = (typeof lr.dry_run === 'boolean') ? lr.dry_run : isDry;
+        showRunCompleted(lr, doneDry);
+        resetAndFetch();
+        const btn = document.getElementById('btn-run-rule');
+        if (btn) {
+          btn.disabled = false;
+          btn.classList.remove('opacity-50', 'cursor-not-allowed');
+          btn.textContent = 'Run';
+        }
+        currentRunIsDry = null;
+      } else {
+        showRunProgress(d, currentRunIsDry);
+      }
+    } catch (_) { /* keep polling through transient errors */ }
+  }, 2000);
+}
+
+// If a run is already in flight when the page loads, show the banner.
+function checkRuleRunStatus() {
+  fetch('/api/run/progress')
+    .then(r => r.json())
+    .then(d => {
+      if (d.running) {
+        const lr = d.last_result || {};
+        const guess = (typeof lr.dry_run === 'boolean') ? lr.dry_run : null;
+        showRunProgress(d, guess);
+        const btn = document.getElementById('btn-run-rule');
+        if (btn) {
+          btn.disabled = true;
+          btn.classList.add('opacity-50', 'cursor-not-allowed');
+          btn.textContent = 'Running…';
+        }
+        startRunPolling(guess);
+      }
+    })
+    .catch(() => {});
+}
+
+function confirmRuleLiveRun(onConfirm) {
+  // Styled replacement for window.confirm when triggering a live run.
+  // Copy mirrors the Rules page dialog so the two pages feel consistent.
+  const destructive = ruleHasDestructiveActions();
+  const dlg = document.getElementById('live-run-dialog');
+  const titleEl = document.getElementById('live-run-dialog-title');
+  const bodyEl = document.getElementById('live-run-dialog-body');
+  const confirmBtn = document.getElementById('live-run-confirm-btn');
+  const title = 'Start Live Run?';
+  const body = destructive
+    ? 'This rule has destructive actions (delete / unmonitor). Items past grace will be acted on.'
+    : 'No destructive actions are configured. This will sync Plex collections and apply tags. No media will be deleted or unmonitored.';
+  const confirmCls = destructive
+    ? 'rounded-md px-3 py-1.5 text-sm font-medium bg-rose-500 hover:bg-rose-400 text-white'
+    : 'rounded-md px-3 py-1.5 text-sm font-medium bg-indigo-500 hover:bg-indigo-400 text-white';
+  const confirmLabel = destructive ? 'Start Live Run' : 'Continue';
+  if (!dlg || typeof dlg.showModal !== 'function') {
+    if (confirm(body)) onConfirm();
+    return;
+  }
+  if (titleEl) titleEl.textContent = title;
+  if (bodyEl) bodyEl.textContent = body;
+  if (confirmBtn) {
+    confirmBtn.textContent = confirmLabel;
+    confirmBtn.className = confirmCls;
+    // Single-use handler so repeated opens don't stack listeners.
+    const handler = () => {
+      confirmBtn.removeEventListener('click', handler);
+      dlg.close();
+      onConfirm();
+    };
+    confirmBtn.addEventListener('click', handler);
+  }
+  dlg.showModal();
+}
+
+async function triggerRuleRun(mode) {
+  // mode: 'dry' | 'live'
+  const dry = mode === 'dry';
+  if (!dry) {
+    confirmRuleLiveRun(() => triggerRuleRun._doRun(false));
+    return;
+  }
+  triggerRuleRun._doRun(true);
+}
+
+triggerRuleRun._doRun = async function (dry) {
+  const btn = document.getElementById('btn-run-rule');
+  if (btn) {
+    btn.disabled = true;
+    btn.classList.add('opacity-50', 'cursor-not-allowed');
+    btn.textContent = 'Starting…';
+  }
+  // Immediate banner so the user sees dry vs live right away, before the
+  // server has a chance to emit its first progress tick.
+  showRunProgress({ phase: '', detail: 'Starting...', percent: 0, items_processed: 0, items_total: 0 }, dry);
+  try {
+    const qs = dry ? 'dry_run=true&' : '';
+    const resp = await fetch(`/api/run?${qs}rule=${encodeURIComponent(colName)}`, { method: 'POST' });
+    const d = await resp.json().catch(() => ({}));
+    if (!resp.ok) throw new Error(d.detail || 'HTTP ' + resp.status);
+    if (d.status === 'already_running') {
+      showToast('Another run is in progress - wait for it to finish.', 'info');
+      startRunPolling(null);
+      return;
+    } else if (d.status === 'started') {
+      if (btn) btn.textContent = 'Running…';
+      startRunPolling(dry);
+      return;
+    } else {
+      showToast('Unexpected response starting run', 'error');
+    }
+  } catch (err) {
+    showToast('Failed to start run: ' + err.message, 'error');
+    const el = document.getElementById('run-progress');
+    if (el) el.classList.add('hidden');
+  }
+  if (btn) {
+    btn.disabled = false;
+    btn.classList.remove('opacity-50', 'cursor-not-allowed');
+    btn.textContent = 'Run';
+  }
+}
+
+const runBtn = document.getElementById('btn-run-rule');
+const runMenuBtn = document.getElementById('btn-run-menu');
+const runMenu = document.getElementById('run-menu');
+if (runBtn) runBtn.addEventListener('click', () => triggerRuleRun(defaultRunMode()));
+if (runMenuBtn && runMenu) {
+  runMenuBtn.addEventListener('click', (e) => {
+    e.stopPropagation();
+    const open = runMenu.classList.toggle('hidden') === false;
+    runMenuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+  });
+  document.addEventListener('click', (e) => {
+    if (!runMenu.contains(e.target) && e.target !== runMenuBtn) {
+      runMenu.classList.add('hidden');
+      runMenuBtn.setAttribute('aria-expanded', 'false');
+    }
+  });
+  runMenu.querySelectorAll('[data-run-mode]').forEach(item => {
+    item.addEventListener('click', () => {
+      runMenu.classList.add('hidden');
+      runMenuBtn.setAttribute('aria-expanded', 'false');
+      triggerRuleRun(item.getAttribute('data-run-mode'));
+    });
+  });
+}
+// Initial tooltip; re-set once the rule config lands.
+updateRunButtonTooltip();
+// Show the progress banner if a run is already in flight on page load.
+checkRuleRunStatus();
+
+// Initial load - fill viewport, then keep loading if content doesn't scroll
+async function initialLoad() {
+  const target = document.getElementById('col-data');
+  try {
+    const data = await fetchPage(1);
+
+    // Update breadcrumb/title with resolved name
+    const displayName = data.collection || colName;
+    document.getElementById('col-title').textContent = displayName;
+    document.getElementById('breadcrumb-name').textContent = displayName;
+
+    totalItems = data.total;
+    currentPage = 1;
+    allItems = data.items || [];
+
+    if (allItems.length >= totalItems || !data.items || data.items.length < perPage) {
+      fullyLoaded = true;
+    }
+
+    // Handle rule-not-found case
+    if (totalItems === 0 && !data.config && !currentSearch.trim()) {
+      target.innerHTML = `
+        <div class="text-center py-12 px-4 border-2 border-dashed border-zinc-700 rounded-lg">
+          <h3 class="text-lg font-semibold text-zinc-100 mb-2">Rule Not Found</h3>
+          <p class="text-zinc-500 mb-4">No rule named "${displayName}" exists. It may have been deleted.</p>
+          <a href="/rules" class="inline-flex px-4 py-2 rounded-md border border-zinc-600 text-sm text-zinc-300 hover:bg-zinc-800 transition-colors">Back to Rules</a>
+        </div>`;
+      document.getElementById('col-summary').textContent = '';
+      return;
+    }
+
+    renderAll();
+
+    // If content doesn't fill the viewport, keep loading until it does
+    let fills = 0;
+    while (!fullyLoaded && fills < 5 &&
+           document.documentElement.scrollHeight <= window.innerHeight + 100) {
+      fills++;
+      const nextPage = currentPage + 1;
+      const more = await fetchPage(nextPage);
+      totalItems = more.total;
+      currentPage = nextPage;
+      if (more.items && more.items.length > 0) {
+        allItems = allItems.concat(more.items);
+      }
+      if (allItems.length >= totalItems || !more.items || more.items.length < perPage) {
+        fullyLoaded = true;
+      }
+      renderAll();
+    }
+  } catch (err) {
+    target.innerHTML = `<p class="text-rose-500 text-sm">Error loading rule: ${err.message}</p>`;
+    document.getElementById('col-summary').textContent = '';
+  }
+}
+
+// Start
+initialLoad();
+</script>
+{% endblock %}

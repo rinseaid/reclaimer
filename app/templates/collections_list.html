@@ -1,0 +1,1412 @@
+{% extends "base.html" %}
+{% block title %}Rules{% endblock %}
+{% block content %}
+<!-- Run Progress - top of page, hidden by default -->
+<div id="run-progress" class="hidden mb-4 px-4 py-3 rounded-lg bg-indigo-500/10 border border-indigo-500/20">
+    <div class="flex items-center gap-3 mb-2">
+        <svg class="w-5 h-5 shrink-0 animate-spin text-indigo-400" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-opacity="0.2"/>
+            <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+        </svg>
+        <div class="flex-1">
+            <strong id="run-phase" class="text-zinc-100">Starting...</strong>
+            <small id="run-detail" class="block text-zinc-400"></small>
+        </div>
+        <small id="run-items" class="text-zinc-400"></small>
+    </div>
+    <progress id="run-bar" value="0" max="100" class="w-full"></progress>
+</div>
+
+<!-- Header row -->
+<div class="flex items-baseline justify-between flex-wrap gap-2 mb-2">
+    <div>
+        <h2 class="text-2xl font-bold text-zinc-100 mb-1">Rules</h2>
+        <p id="dash-subtitle" class="text-sm text-zinc-400 mb-0">Loading...</p>
+    </div>
+    <div class="flex gap-2 items-center">
+        <div class="relative inline-flex" id="run-split">
+            <button type="button" id="btn-run"
+                    class="rounded-l-md px-3 py-1.5 text-sm font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent transition-colors border-r-0"
+                    title="Run all rules">Run</button>
+            <button type="button" id="btn-run-menu" aria-haspopup="true" aria-expanded="false" aria-label="Run options"
+                    class="rounded-r-md px-2 py-1.5 text-sm font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent transition-colors">▾</button>
+            <div id="run-menu"
+                 class="hidden absolute right-0 top-full mt-1 min-w-[220px] rounded-md border border-zinc-700 bg-zinc-900 shadow-lg z-40 py-1"
+                 role="menu" aria-label="Run options">
+                <button type="button" data-run-mode="dry" role="menuitem"
+                        class="w-full text-left px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800">
+                    <span class="font-medium">Run dry</span>
+                    <span class="block text-xs text-zinc-500">No changes - preview what would match.</span>
+                </button>
+                <button type="button" data-run-mode="live" role="menuitem"
+                        class="w-full text-left px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800">
+                    <span class="font-medium">Run live</span>
+                    <span class="block text-xs text-zinc-500">Apply every enabled rule's pipeline.</span>
+                </button>
+            </div>
+        </div>
+        <button id="btn-dry" class="hidden"></button>
+    </div>
+</div>
+
+<!-- KPI Cards -->
+<div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6" id="kpi-cards">
+    <div class="bg-zinc-900 rounded-lg p-4 border border-zinc-800 animate-pulse">
+        <span class="text-zinc-400 text-sm">Loading...</span>
+    </div>
+    <div class="bg-zinc-900 rounded-lg p-4 border border-zinc-800"></div>
+    <div class="bg-zinc-900 rounded-lg p-4 border border-zinc-800"></div>
+</div>
+
+<!-- Rules Table / Empty State -->
+<div id="collections-table"></div>
+
+<!-- New Rule Button + Kebab menu (hidden when empty-state is shown, since the empty state has its own CTA) -->
+<div class="mt-4 flex items-center gap-2 relative" id="new-rule-row">
+    <button id="btn-create" class="rounded-md px-3 py-1.5 text-sm font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent" onclick="openTemplatePicker()">+ New Rule</button>
+    <div class="relative">
+      <button id="btn-kebab" type="button"
+              aria-haspopup="true" aria-expanded="false" aria-label="Rules options"
+              title="More actions"
+              class="rounded-md px-2.5 py-1.5 text-sm font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent leading-none">
+        &ctdot;
+      </button>
+      <div id="kebab-menu"
+           class="hidden absolute left-0 mt-1 min-w-[180px] rounded-md border border-zinc-700 bg-zinc-900 shadow-lg z-40 py-1"
+           role="menu" aria-label="Rules options">
+        <button type="button" id="kebab-export"
+                class="w-full text-left px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800" role="menuitem">Export rules</button>
+        <button type="button" id="kebab-import"
+                class="w-full text-left px-3 py-1.5 text-sm text-zinc-200 hover:bg-zinc-800" role="menuitem">Import rules&hellip;</button>
+      </div>
+      <input type="file" id="import-file-input" accept=".json,application/json" class="hidden">
+    </div>
+</div>
+
+<!-- Import confirmation dialog -->
+<dialog id="import-dialog" class="rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-100 p-0 backdrop:bg-black/60 max-w-md w-full">
+  <div class="p-6">
+    <h3 class="text-lg font-semibold text-zinc-100 mb-2">Import Rules</h3>
+    <p class="text-zinc-400 text-sm mb-4">About to import <strong id="import-count" class="text-zinc-200">0</strong> rule(s) from <span id="import-filename" class="text-zinc-300 font-mono text-xs"></span>.</p>
+    <fieldset class="space-y-2 mb-4">
+      <label class="flex items-start gap-2 cursor-pointer text-sm">
+        <input type="radio" name="import-mode" value="merge" checked class="mt-0.5 accent-indigo-500">
+        <span>
+          <span class="text-zinc-100 font-medium">Merge</span>
+          <span class="block text-xs text-zinc-400">Existing rules with the same name are skipped. Your current rules stay.</span>
+        </span>
+      </label>
+      <label class="flex items-start gap-2 cursor-pointer text-sm">
+        <input type="radio" name="import-mode" value="replace" class="mt-0.5 accent-rose-500">
+        <span>
+          <span class="text-zinc-100 font-medium">Replace</span>
+          <span class="block text-xs text-zinc-400">All existing rules are deleted and replaced with the imported set.</span>
+        </span>
+      </label>
+    </fieldset>
+    <div id="import-replace-warning" class="hidden mb-4 p-3 rounded-md bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs">
+      <strong>Warning:</strong> This will delete all your current rules. Cannot be undone.
+    </div>
+    <div class="flex gap-3 justify-end">
+      <button type="button" id="import-cancel-btn"
+              class="rounded-md px-3 py-1.5 text-sm font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent">Cancel</button>
+      <button type="button" id="import-confirm-btn"
+              class="rounded-md px-3 py-1.5 text-sm font-medium bg-indigo-500 hover:bg-indigo-400 text-white">Import</button>
+    </div>
+    <div class="mcm-kbd-hint"><span>Press</span> <kbd class="mcm-kbd">Esc</kbd> <span>to close</span></div>
+  </div>
+</dialog>
+
+<!-- Create Rule Dialog -->
+<dialog id="create-dialog" class="rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-100 p-0 backdrop:bg-black/60 max-w-md w-full">
+  <div class="p-6">
+    <h3 class="text-lg font-semibold text-zinc-100 mb-4">Create New Rule</h3>
+    <form id="create-form" onsubmit="return createRule(event)">
+      <label class="block text-sm font-medium text-zinc-300 mb-1">Rule Name</label>
+      <input type="text" id="new-rule-name" placeholder="e.g. Movies - Never Watched" required autofocus
+             class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 mb-2">
+      <small class="block text-zinc-500 text-xs mb-4">A descriptive name for this lifecycle rule. You can configure the library, action, and criteria after creating it.</small>
+      <div class="flex gap-3 justify-end mt-4">
+        <button type="button" class="rounded-md px-3 py-1.5 text-sm font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent" onclick="document.getElementById('create-dialog').close()">Cancel</button>
+        <button type="submit" id="create-submit-btn" class="rounded-md px-3 py-1.5 text-sm font-medium bg-indigo-500 hover:bg-indigo-400 text-white">Create</button>
+      </div>
+    </form>
+    <div class="mcm-kbd-hint"><span>Press</span> <kbd class="mcm-kbd">Esc</kbd> <span>to close</span></div>
+  </div>
+</dialog>
+
+<!-- Template picker dialog -->
+<dialog id="template-dialog" class="rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-100 p-0 backdrop:bg-black/60 max-w-5xl w-full">
+  <div class="p-6">
+    <div class="flex items-start justify-between gap-4 mb-4">
+      <div>
+        <h3 class="text-lg font-semibold text-zinc-100">New rule</h3>
+        <p class="text-zinc-400 text-sm mt-0.5">Start from a template or build from scratch. Nothing runs until you kick off a scan, and every field stays fully editable.</p>
+      </div>
+      <button type="button" class="text-zinc-500 hover:text-zinc-200 text-xl leading-none px-2" onclick="document.getElementById('template-dialog').close()" aria-label="Close">&times;</button>
+    </div>
+    <div id="template-list" class="grid gap-3 md:grid-cols-2 lg:grid-cols-3"></div>
+    <div class="mcm-kbd-hint"><span>Press</span> <kbd class="mcm-kbd">Esc</kbd> <span>to close</span></div>
+  </div>
+</dialog>
+
+<!-- Live Run confirmation dialog -->
+<dialog id="live-run-dialog" class="rounded-lg bg-zinc-900 border border-zinc-700 text-zinc-100 p-0 backdrop:bg-black/60 max-w-md w-full">
+  <div class="p-6">
+    <h3 class="text-lg font-semibold text-zinc-100 mb-2">Start Live Run?</h3>
+    <p class="text-zinc-400 text-sm mb-5">This will apply actions to matching items (including delete, unmonitor, etc.). Continue?</p>
+    <div class="flex gap-3 justify-end">
+      <button type="button" class="rounded-md px-3 py-1.5 text-sm font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent" onclick="document.getElementById('live-run-dialog').close()">Cancel</button>
+      <button type="button" id="live-run-confirm-btn" class="rounded-md px-3 py-1.5 text-sm font-medium bg-amber-500 hover:bg-amber-400 text-zinc-900">Start Live Run</button>
+    </div>
+    <div class="mcm-kbd-hint"><span>Press</span> <kbd class="mcm-kbd">Esc</kbd> <span>to close</span></div>
+  </div>
+</dialog>
+
+<!-- Toast container -->
+<div id="toast-container" class="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none"></div>
+
+<script>
+/* Shared toast helper */
+window.showToast = function(message, kind) {
+    kind = kind || 'success';
+    const palette = {
+        success: 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300',
+        error:   'bg-rose-500/15 border-rose-500/40 text-rose-300',
+        info:    'bg-sky-500/15 border-sky-500/40 text-sky-300',
+    };
+    const cls = palette[kind] || palette.success;
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = `pointer-events-auto px-4 py-2.5 rounded-md border text-sm font-medium shadow-lg transition-all duration-200 opacity-0 translate-y-[-6px] ${cls}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    requestAnimationFrame(() => {
+        toast.classList.remove('opacity-0', 'translate-y-[-6px]');
+    });
+    setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-[-6px]');
+        setTimeout(() => toast.remove(), 250);
+    }, 3000);
+};
+</script>
+
+<script>
+(function() {
+    const btnDry = document.getElementById('btn-dry');
+    const btnRun = document.getElementById('btn-run');
+    let pendingDry = null;  // last triggered mode: true=dry, false=live
+
+    // Destructive action types require after-grace execution on real media.
+    // Immediate/non-destructive types (sync_collection, add_arr_tag) are safe.
+    const DESTRUCTIVE_TYPES = new Set(['delete', 'delete_files', 'unmonitor', 'import_exclusion', 'script']);
+
+    function classifyConfiguredActions() {
+        // Returns { destructiveRules: string[], hasImmediate: boolean }
+        const out = { destructiveRules: [], hasImmediate: false };
+        if (!cachedDashboard || !cachedDashboard.collections) return out;
+        for (const [name, stats] of Object.entries(cachedDashboard.collections)) {
+            if (!stats.enabled) continue;
+            const pipeline = stats.action_pipeline || [];
+            let destructive = false;
+            for (const step of pipeline) {
+                if (DESTRUCTIVE_TYPES.has(step.type)) destructive = true;
+                if (step.type === 'sync_collection' || step.type === 'add_arr_tag' || step.type === 'remove_arr_tag') out.hasImmediate = true;
+            }
+            if (destructive) out.destructiveRules.push(name);
+        }
+        return out;
+    }
+
+    function anyRuleDestructive() {
+        return classifyConfiguredActions().destructiveRules.length > 0;
+    }
+
+    function confirmLiveRun() {
+        const summary = classifyConfiguredActions();
+        const dlg = document.getElementById('live-run-dialog');
+        const titleEl = dlg?.querySelector('h3');
+        const bodyEl = dlg?.querySelector('p');
+        const confirmEl = document.getElementById('live-run-confirm-btn');
+
+        let title, body, confirmLabel, confirmCls, skip = false;
+        if (summary.destructiveRules.length > 0) {
+            title = 'Start Live Run?';
+            body = `<strong class="text-rose-400">${summary.destructiveRules.length}</strong> rule${summary.destructiveRules.length > 1 ? 's have' : ' has'} destructive actions configured (${summary.destructiveRules.join(', ')}). Items past their grace period will be deleted, unmonitored, or otherwise acted on. Continue?`;
+            confirmLabel = 'Start Live Run';
+            confirmCls = 'bg-rose-500 hover:bg-rose-400 text-white';
+        } else if (summary.hasImmediate) {
+            title = 'Start Live Run?';
+            body = 'No destructive actions are configured. This will sync Plex collections and apply tags. No media will be deleted or unmonitored.';
+            confirmLabel = 'Continue';
+            confirmCls = 'bg-indigo-500 hover:bg-indigo-400 text-white';
+        } else {
+            // Nothing to actually do differently from a dry run.
+            skip = true;
+        }
+
+        if (skip) {
+            triggerRun(false);
+            return;
+        }
+
+        if (!dlg || typeof dlg.showModal !== 'function') {
+            if (confirm(body.replace(/<[^>]+>/g, ''))) triggerRun(false);
+            return;
+        }
+
+        if (titleEl) titleEl.textContent = title;
+        if (bodyEl) bodyEl.innerHTML = body;
+        if (confirmEl) {
+            confirmEl.textContent = confirmLabel;
+            // Reset existing palette classes then apply the new one.
+            confirmEl.className = `rounded-md px-3 py-1.5 text-sm font-medium ${confirmCls}`;
+        }
+        dlg.showModal();
+    }
+
+    // Primary Run click: smart default. Dry when any enabled rule has a
+    // destructive action in its pipeline, live otherwise (still gated by the
+    // confirmation dialog for visibility).
+    btnRun.addEventListener('click', () => {
+        if (anyRuleDestructive()) triggerRun(true);
+        else confirmLiveRun();
+    });
+
+    // ▾ dropdown: explicit Run dry / Run live.
+    const runMenuBtn = document.getElementById('btn-run-menu');
+    const runMenu = document.getElementById('run-menu');
+    if (runMenuBtn && runMenu) {
+        runMenuBtn.addEventListener('click', (e) => {
+            e.stopPropagation();
+            const open = runMenu.classList.toggle('hidden') === false;
+            runMenuBtn.setAttribute('aria-expanded', open ? 'true' : 'false');
+        });
+        document.addEventListener('click', (e) => {
+            if (!runMenu.contains(e.target) && e.target !== runMenuBtn) {
+                runMenu.classList.add('hidden');
+                runMenuBtn.setAttribute('aria-expanded', 'false');
+            }
+        });
+        runMenu.querySelectorAll('[data-run-mode]').forEach(item => {
+            item.addEventListener('click', () => {
+                runMenu.classList.add('hidden');
+                runMenuBtn.setAttribute('aria-expanded', 'false');
+                const mode = item.getAttribute('data-run-mode');
+                if (mode === 'dry') triggerRun(true);
+                else confirmLiveRun();
+            });
+        });
+    }
+
+    const confirmLiveBtn = document.getElementById('live-run-confirm-btn');
+    if (confirmLiveBtn) {
+        confirmLiveBtn.addEventListener('click', () => {
+            document.getElementById('live-run-dialog').close();
+            triggerRun(false);
+        });
+    }
+
+    function updateRunButtonTooltip() {
+        if (!btnRun) return;
+        btnRun.title = anyRuleDestructive()
+            ? 'Run - will default to DRY because at least one rule has destructive actions. Use ▾ to force live.'
+            : 'Run - will run LIVE because no rule has destructive actions in its pipeline.';
+    }
+
+    let cachedDashboard = null;
+
+    Promise.all([
+        fetch('/api/dashboard').then(r => r.json()),
+        fetch('/api/settings').then(r => r.json()),
+    ])
+    .then(([data, settings]) => { cachedDashboard = data; render(data, settings); updateRunButtonTooltip(); })
+    .catch(err => {
+        document.getElementById('kpi-cards').innerHTML =
+            `<div class="bg-zinc-900 rounded-lg p-4 border border-zinc-800"><p class="text-rose-500">Failed to load: ${err.message}</p></div>`;
+    });
+
+    function slugify(name) {
+        return name.toLowerCase().replace(/\s+/g, '-').replace(/--+/g, '-');
+    }
+
+    function formatBytes(bytes) {
+        if (!bytes || bytes <= 0) return null;
+        if (bytes >= 1099511627776) return (bytes / 1099511627776).toFixed(1) + ' TB';
+        if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(1) + ' GB';
+        if (bytes >= 1048576) return (bytes / 1048576).toFixed(0) + ' MB';
+        return (bytes / 1024).toFixed(0) + ' KB';
+    }
+
+    function formatRelativeTime(isoString) {
+        if (!isoString) return 'Never';
+        const s = isoString.includes('T') ? isoString : isoString.replace(' ', 'T');
+        const d = new Date(s + (s.includes('Z') || s.includes('+') ? '' : 'Z'));
+        const now = new Date();
+        const diffMs = now - d;
+        const diffMin = Math.floor(diffMs / 60000);
+        if (diffMin < 1) return 'Just now';
+        if (diffMin < 60) return diffMin + 'm ago';
+        const diffHr = Math.floor(diffMin / 60);
+        if (diffHr < 24) return diffHr + 'h ' + (diffMin % 60) + 'm ago';
+        const diffDays = Math.floor(diffHr / 24);
+        return diffDays + 'd ago';
+    }
+
+    function nextScheduledRun(hour, minute) {
+        const now = new Date();
+        const next = new Date(now);
+        next.setHours(hour, minute, 0, 0);
+        if (next <= now) next.setDate(next.getDate() + 1);
+        const diffMs = next - now;
+        const diffHr = Math.floor(diffMs / 3600000);
+        const diffMin = Math.floor((diffMs % 3600000) / 60000);
+        const timeStr = next.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        if (diffHr < 1) return `in ${diffMin}m (${timeStr})`;
+        return `in ${diffHr}h ${diffMin}m (${timeStr})`;
+    }
+
+    const STEP_LABELS = {
+        'unmonitor':            'Unmonitor in Radarr/Sonarr',
+        'delete':               'Delete from Radarr/Sonarr',
+        'delete_files':         'Delete files from disk',
+        'import_exclusion':     'Block from re-importing',
+        'sync_collection':      'Sync to Plex/Jellyfin collection',
+        'add_arr_tag':          'Tag in Radarr/Sonarr',
+        'remove_arr_tag':       'Remove tag in Radarr/Sonarr',
+        'set_root_folder':      'Move to root folder',
+        'swap_quality_profile': 'Swap quality profile',
+        'trigger_search':       'Trigger search',
+        'migrate_to_instance':  'Migrate to another instance',
+        'downgrade_quality':    'Downgrade quality profile',
+        'notify':               'Send notification',
+        'script':               'Run custom script',
+    };
+    // Types whose default timing is immediate (runs every scan as soon as
+    // an item matches). Everything else defaults to after-grace. Must stay
+    // in sync with renderPipeline() in collection_settings.html.
+    const IMMEDIATE_STEP_TYPES = new Set(['sync_collection', 'add_arr_tag', 'remove_arr_tag']);
+    const LOCKED_AFTER_GRACE = new Set([
+        'downgrade_quality', 'swap_quality_profile',
+        'set_root_folder', 'migrate_to_instance',
+    ]);
+
+    // Icon set: inline SVG paths so we don't need an icon-font dep. One glyph
+    // per action type, falling back to a dot if a new type lands.
+    const STEP_ICONS = {
+        'unmonitor':            '<path d="M3 3l18 18M9 4h10v10m-1 6H5a2 2 0 01-2-2V7"/>',
+        'delete':               '<path d="M3 6h18M8 6V4a1 1 0 011-1h6a1 1 0 011 1v2M6 6l1 14a2 2 0 002 2h6a2 2 0 002-2l1-14M10 11v6M14 11v6"/>',
+        'delete_files':         '<path d="M4 4h9l5 5v11a2 2 0 01-2 2H4V4z"/><path d="M8 14l8 4M16 14l-8 4"/>',
+        'import_exclusion':     '<circle cx="12" cy="12" r="9"/><path d="M5.6 5.6l12.8 12.8"/>',
+        'sync_collection':      '<path d="M4 12a8 8 0 0114-5l2 2M20 12a8 8 0 01-14 5l-2-2M20 4v5h-5M4 20v-5h5"/>',
+        'add_arr_tag':          '<path d="M20 12l-8 8a2.83 2.83 0 01-4 0L2 14a2.83 2.83 0 010-4l8-8h8v8z"/><circle cx="15" cy="9" r="1.5" fill="currentColor"/>',
+        'remove_arr_tag':       '<path d="M20 12l-8 8a2.83 2.83 0 01-4 0L2 14a2.83 2.83 0 010-4l8-8h8v8z"/><path d="M5 5l14 14" stroke-linecap="round"/>',
+        'set_root_folder':      '<path d="M3 7a2 2 0 012-2h4l2 2h8a2 2 0 012 2v9a2 2 0 01-2 2H5a2 2 0 01-2-2V7z"/><path d="M12 12v5M9 15l3 3 3-3" stroke-linecap="round"/>',
+        'swap_quality_profile': '<path d="M7 4v12M7 16l-3-3M7 16l3-3M17 20V8M17 8l-3 3M17 8l3 3"/>',
+        'trigger_search':       '<circle cx="11" cy="11" r="6"/><path d="M20 20l-4.35-4.35" stroke-linecap="round"/>',
+        'migrate_to_instance':  '<path d="M4 7h10l-3-3M20 17H10l3 3" stroke-linecap="round" stroke-linejoin="round"/>',
+        'downgrade_quality':    '<path d="M12 5v14M6 13l6 6 6-6"/>',
+        'notify':               '<path d="M18 16v-5a6 6 0 10-12 0v5l-2 2h16l-2-2zM10 20a2 2 0 004 0"/>',
+        'script':               '<path d="M8 3a5 5 0 00-5 5v8a5 5 0 005 5h8a5 5 0 005-5V8a5 5 0 00-5-5H8z"/><path d="M8 9l2 3-2 3M13 15h4"/>',
+    };
+
+    // Decide the effective timing for a step (explicit override wins).
+    function stepTiming(step) {
+        if (LOCKED_AFTER_GRACE.has(step.type)) return 'after_grace';
+        return step.timing || (IMMEDIATE_STEP_TYPES.has(step.type) ? 'immediate' : 'after_grace');
+    }
+
+    function pipelineLabel(pipeline) {
+        if (!pipeline || pipeline.length === 0) return '<span class="text-zinc-500 text-xs">None</span>';
+        return pipeline.map(s => {
+            const glyph = STEP_ICONS[s.type] || '<circle cx="12" cy="12" r="3"/>';
+            const timing = stepTiming(s);
+            // Immediate = sky (matches the "Immediate" pill on the action
+            // editor), after-grace = amber. Destructive steps always run
+            // after grace, so the amber bucket covers them - no extra
+            // destructive-vs-safe colour since timing already implies it.
+            const cls = timing === 'immediate'
+                ? 'bg-sky-500/15 text-sky-400 ring-1 ring-sky-500/30'
+                : 'bg-amber-500/15 text-amber-400 ring-1 ring-amber-500/30';
+            const label = STEP_LABELS[s.type] || s.type;
+            const timingLabel = timing === 'immediate' ? 'Immediate' : 'After grace';
+            return `<span class="inline-flex items-center justify-center w-6 h-6 rounded-md ${cls}" title="${label} (${timingLabel})" aria-label="${label}, ${timingLabel}">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" class="w-3.5 h-3.5">${glyph}</svg>
+                    </span>`;
+        }).join('<span class="mx-0.5 text-zinc-500 text-xs">\u203a</span>');
+    }
+
+    function renderEmptyState() {
+        // Inline SVG: library-shelf composition with a small clock overlay.
+        // No external deps; scales cleanly at any size.
+        const illustrationSvg = `
+            <svg viewBox="0 0 200 140" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"
+                 class="w-44 h-32 mx-auto mb-6">
+              <defs>
+                <linearGradient id="mcm-hero-g" x1="0" x2="1" y1="0" y2="1">
+                  <stop offset="0" stop-color="#6366f1" stop-opacity="0.35"/>
+                  <stop offset="1" stop-color="#818cf8" stop-opacity="0.08"/>
+                </linearGradient>
+              </defs>
+              <rect x="22" y="28" width="140" height="90" rx="4" fill="url(#mcm-hero-g)" stroke="#4f46e5" stroke-width="1.5"/>
+              <line x1="22" y1="72" x2="162" y2="72" stroke="#4f46e5" stroke-width="1" opacity="0.5"/>
+              <rect x="30"  y="36" width="10" height="32" rx="1" fill="#818cf8"/>
+              <rect x="42"  y="40" width="8"  height="28" rx="1" fill="#a5b4fc"/>
+              <rect x="52"  y="34" width="12" height="34" rx="1" fill="#6366f1"/>
+              <rect x="66"  y="44" width="9"  height="24" rx="1" fill="#c7d2fe"/>
+              <rect x="77"  y="38" width="11" height="30" rx="1" fill="#818cf8"/>
+              <rect x="90"  y="42" width="8"  height="26" rx="1" fill="#a5b4fc"/>
+              <rect x="100" y="36" width="10" height="32" rx="1" fill="#6366f1"/>
+              <rect x="112" y="40" width="9"  height="28" rx="1" fill="#c7d2fe"/>
+              <rect x="123" y="34" width="11" height="34" rx="1" fill="#818cf8"/>
+              <rect x="136" y="42" width="8"  height="26" rx="1" fill="#a5b4fc"/>
+              <rect x="146" y="38" width="11" height="30" rx="1" fill="#6366f1"/>
+              <rect x="30"  y="80" width="9"  height="30" rx="1" fill="#c7d2fe"/>
+              <rect x="41"  y="84" width="11" height="26" rx="1" fill="#818cf8"/>
+              <rect x="54"  y="78" width="10" height="32" rx="1" fill="#6366f1"/>
+              <rect x="66"  y="82" width="9"  height="28" rx="1" fill="#a5b4fc"/>
+              <rect x="77"  y="86" width="8"  height="24" rx="1" fill="#c7d2fe"/>
+              <circle cx="142" cy="98" r="18" fill="#18181b" stroke="#6366f1" stroke-width="2"/>
+              <line x1="142" y1="98" x2="142" y2="87" stroke="#a5b4fc" stroke-width="2" stroke-linecap="round"/>
+              <line x1="142" y1="98" x2="150" y2="101" stroke="#a5b4fc" stroke-width="2" stroke-linecap="round"/>
+              <circle cx="142" cy="98" r="1.5" fill="#a5b4fc"/>
+            </svg>`;
+
+        return `
+        <div class="bg-zinc-900 rounded-xl border border-zinc-800 p-8 md:p-12 text-center max-w-2xl mx-auto">
+            ${illustrationSvg}
+            <h3 class="text-2xl font-bold text-zinc-100 mb-3">Welcome to Media Collection Manager</h3>
+            <p class="text-zinc-400 text-sm max-w-lg mx-auto mb-8">
+                MCM finds unwatched content in your libraries and optionally removes it after a grace period, based on rules you define.
+            </p>
+            <ol class="text-left max-w-md mx-auto space-y-3 mb-8">
+                <li class="flex gap-3 items-start">
+                    <span class="shrink-0 w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-bold flex items-center justify-center mt-0.5">1</span>
+                    <span class="text-sm text-zinc-300"><strong class="text-zinc-100">Create a rule</strong> - sets criteria, protections, and what to do.</span>
+                </li>
+                <li class="flex gap-3 items-start">
+                    <span class="shrink-0 w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-bold flex items-center justify-center mt-0.5">2</span>
+                    <span class="text-sm text-zinc-300"><strong class="text-zinc-100">Run a dry scan</strong> to see what it would flag - no changes made.</span>
+                </li>
+                <li class="flex gap-3 items-start">
+                    <span class="shrink-0 w-6 h-6 rounded-full bg-indigo-500/20 text-indigo-300 text-xs font-bold flex items-center justify-center mt-0.5">3</span>
+                    <span class="text-sm text-zinc-300"><strong class="text-zinc-100">Configure actions</strong> and let it run on a schedule.</span>
+                </li>
+            </ol>
+            <div class="flex justify-center">
+                <button type="button" id="empty-template-btn"
+                    class="inline-flex items-center gap-2 rounded-md px-5 py-2.5 text-sm font-semibold bg-indigo-500 hover:bg-indigo-400 text-white transition-colors">
+                    <span class="text-lg leading-none">+</span> Create your first rule
+                </button>
+            </div>
+        </div>`;
+    }
+
+    /* ------------------------------------------------------------------
+       Rule templates.
+
+       Each entry produces a ready-to-save payload for POST /api/collections
+       (CollectionCreate model). `criteria.rules` holds the per-rule toggles;
+       top-level `criteria.*` keys are the UI flags defined on CriteriaModel
+       (see app/api/collections.py). After creation we redirect to the
+       rule's settings page so the user can pick a library and tweak.
+    ------------------------------------------------------------------ */
+    /* A common protection bundle used by most templates. Keeps favorited /
+       recently-added items safe so a new rule doesn't nuke fresh picks. */
+    const SAFE_PROTECTIONS = {
+        no_active_request: { enabled: true },
+        on_watchlist: { enabled: true },
+        plex_favorited: { enabled: true },
+        recently_added: { enabled: true, days: 14 },
+    };
+
+    /* Preset pipelines mirror the Action tab presets so templates and the
+       rule editor agree on what "soft delete" etc. actually expand into. */
+    function softDeletePipeline(collectionName) {
+        return [
+            { type: 'sync_collection', command: collectionName, timing: 'immediate' },
+            { type: 'add_arr_tag', command: 'leaving-soon', timing: 'immediate' },
+            { type: 'delete_files', command: '', timing: 'after_grace' },
+            { type: 'import_exclusion', command: '', timing: 'after_grace' },
+        ];
+    }
+
+    const RULE_TEMPLATES = [
+        {
+            id: 'old-and-unwatched',
+            displayName: 'Old & unwatched',
+            tagline: 'Movies \u00b7 Soft-delete 30d',
+            description: "Idle for two years AND poorly rated. The classic long-tail sweep - protects favorites, watchlisted picks, and fresh additions.",
+            icon: 'broom',
+            payload: {
+                name: 'Old & unwatched',
+                media_type: 'movie',
+                action: 'none',
+                grace_days: 30,
+                criteria: {
+                    rules: {
+                        ...SAFE_PROTECTIONS,
+                        not_watched_recently: { enabled: true, days: 730 },
+                        low_rating: { enabled: true, imdb_max: 6.0, critic_max: 55, require_all: false },
+                    },
+                    action: 'none',
+                    grace_days: 30,
+                    action_pipeline: softDeletePipeline('Leaving soon'),
+                    granularity: 'show',
+                },
+            },
+        },
+        {
+            id: 'storage-hogs',
+            displayName: 'Storage hogs',
+            tagline: 'Movies \u00b7 Soft-delete 14d',
+            description: "Files \u226520 GB that nobody has played in 6+ months. Fastest way to reclaim disk when the array is full.",
+            icon: 'disk',
+            payload: {
+                name: 'Storage hogs',
+                media_type: 'movie',
+                action: 'none',
+                grace_days: 14,
+                criteria: {
+                    rules: {
+                        ...SAFE_PROTECTIONS,
+                        not_watched_recently: { enabled: true, days: 180 },
+                        file_size_min: { enabled: true, min_gb: 20 },
+                        highly_rated: { enabled: true, imdb_min: 8.0, rt_min: 85, metacritic_min: 80, require_all: false },
+                    },
+                    action: 'none',
+                    grace_days: 14,
+                    action_pipeline: softDeletePipeline('Leaving soon'),
+                    granularity: 'show',
+                },
+            },
+        },
+        {
+            id: 'ended-and-dormant',
+            displayName: 'Ended & dormant shows',
+            tagline: 'TV \u00b7 Unmonitor + delete',
+            description: "Series Sonarr marks as ended where no one has watched anything in a year. Biggest TV storage win in most libraries.",
+            icon: 'tv',
+            payload: {
+                name: 'Ended & dormant shows',
+                media_type: 'show',
+                action: 'unmonitor',
+                grace_days: 30,
+                criteria: {
+                    rules: {
+                        ...SAFE_PROTECTIONS,
+                        not_watched_recently: { enabled: true, days: 365 },
+                        show_ended: { enabled: true, include_deleted: true },
+                    },
+                    action: 'unmonitor',
+                    grace_days: 30,
+                    action_pipeline: [
+                        { type: 'sync_collection', command: 'Leaving soon', timing: 'immediate' },
+                        { type: 'unmonitor', command: '', timing: 'after_grace' },
+                        { type: 'delete_files', command: '', timing: 'after_grace' },
+                    ],
+                    granularity: 'show',
+                },
+            },
+        },
+        {
+            id: 'request-fulfilled',
+            displayName: 'Request fulfilled',
+            tagline: 'Movies \u00b7 Soft-delete 14d',
+            description: "The person who requested it via Seerr has finished watching. Cleanarr-style - it did its job, let it go.",
+            icon: 'check',
+            payload: {
+                name: 'Request fulfilled',
+                media_type: 'movie',
+                action: 'none',
+                grace_days: 14,
+                criteria: {
+                    rules: {
+                        on_watchlist: { enabled: true },
+                        plex_favorited: { enabled: true },
+                        recently_added: { enabled: true, days: 14 },
+                        request_fulfilled: { enabled: true },
+                    },
+                    action: 'none',
+                    grace_days: 14,
+                    action_pipeline: softDeletePipeline('Leaving soon'),
+                    granularity: 'show',
+                },
+            },
+        },
+        {
+            id: 'flops',
+            displayName: 'Flops',
+            tagline: 'Movies \u00b7 Soft-delete 30d',
+            description: "Low rating, released before 2010, and no one has watched in over a year. Conservative - only flags clear losers.",
+            icon: 'thumbs-down',
+            payload: {
+                name: 'Flops',
+                media_type: 'movie',
+                action: 'none',
+                grace_days: 30,
+                criteria: {
+                    rules: {
+                        ...SAFE_PROTECTIONS,
+                        not_watched_recently: { enabled: true, days: 365 },
+                        low_rating: { enabled: true, imdb_max: 5.5, critic_max: 50, require_all: false },
+                        release_year_before: { enabled: true, year: 2010 },
+                    },
+                    action: 'none',
+                    grace_days: 30,
+                    action_pipeline: softDeletePipeline('Leaving soon'),
+                    granularity: 'show',
+                },
+            },
+        },
+        {
+            id: 'abandoned-starts',
+            displayName: 'Abandoned starts',
+            tagline: 'Movies \u00b7 Notify only',
+            description: "Someone tried it, bailed under 30%, and hasn't come back in 90 days. Non-destructive - just tells you so you can decide.",
+            icon: 'pause',
+            payload: {
+                name: 'Abandoned starts',
+                media_type: 'movie',
+                action: 'none',
+                grace_days: 0,
+                criteria: {
+                    rules: {
+                        ...SAFE_PROTECTIONS,
+                        watch_ratio_low: { enabled: true, max_percent: 30, require_plays: true, days: 90 },
+                    },
+                    action: 'none',
+                    grace_days: 0,
+                    action_pipeline: [
+                        { type: 'notify', command: '', timing: 'after_grace' },
+                    ],
+                    granularity: 'show',
+                },
+            },
+        },
+        {
+            id: 'prune-old-seasons',
+            displayName: 'Prune old seasons',
+            tagline: 'TV \u00b7 per-season \u00b7 Soft-delete',
+            description: "Keeps the last 2 seasons of every ended show; everything older gets staged. Season-level, so ongoing series are safe.",
+            icon: 'scissors',
+            payload: {
+                name: 'Prune old seasons',
+                media_type: 'show',
+                action: 'none',
+                grace_days: 30,
+                criteria: {
+                    rules: {
+                        ...SAFE_PROTECTIONS,
+                        show_ended: { enabled: true, include_deleted: true },
+                        old_season: { enabled: true, keep_last: 2 },
+                        series_protection: { enabled: true },
+                    },
+                    action: 'none',
+                    grace_days: 30,
+                    action_pipeline: softDeletePipeline('Leaving soon'),
+                    granularity: 'season',
+                },
+            },
+        },
+        {
+            id: 'blank',
+            displayName: 'Blank rule',
+            tagline: 'Start from scratch',
+            description: "Start empty and configure every criterion, protection, and action yourself. Use this when none of the templates fits.",
+            icon: 'blank',
+            blank: true,
+        },
+    ];
+
+    const TEMPLATE_ICONS = {
+        film:       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M7 5v14M17 5v14M3 10h4M3 14h4M17 10h4M17 14h4"/></svg>',
+        tv:         '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><rect x="3" y="5" width="18" height="12" rx="2"/><path d="M8 21h8M12 17v4"/></svg>',
+        clock:      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>',
+        disk:       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><ellipse cx="12" cy="6" rx="8" ry="3"/><path d="M4 6v12c0 1.66 3.58 3 8 3s8-1.34 8-3V6M4 12c0 1.66 3.58 3 8 3s8-1.34 8-3"/></svg>',
+        broom:      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M19 4l-8 8M5 20l3-6M6 13l5 5M14 11l-3 3M9 22c-3 0-5-2-5-5l4-3h6l2 4c-1 2-4 4-7 4z"/></svg>',
+        check:      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><circle cx="12" cy="12" r="9"/><path d="M8 12l3 3 5-6"/></svg>',
+        'thumbs-down': '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><path d="M10 15v4a2 2 0 002 2l3-7V4H6.5a2 2 0 00-2 1.7l-1.4 8a2 2 0 002 2.3H10z"/><path d="M17 4h3v10h-3"/></svg>',
+        pause:      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><circle cx="12" cy="12" r="9"/><path d="M10 9v6M14 9v6"/></svg>',
+        scissors:   '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/></svg>',
+        blank:      '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="w-5 h-5"><rect x="4" y="4" width="16" height="16" rx="2" stroke-dasharray="3 3"/><path d="M12 8v8M8 12h8"/></svg>',
+    };
+
+    function renderTemplateList() {
+        const listEl = document.getElementById('template-list');
+        if (!listEl) return;
+        listEl.innerHTML = RULE_TEMPLATES.map(t => {
+            const isBlank = !!t.blank;
+            const tileCls = isBlank
+                ? 'bg-zinc-950 border border-dashed border-zinc-700 rounded-lg p-4 flex flex-col gap-3 hover:border-indigo-500/50 transition-colors'
+                : 'bg-zinc-950 border border-zinc-800 rounded-lg p-4 flex flex-col gap-3 hover:border-indigo-500/50 transition-colors';
+            const iconCls = isBlank
+                ? 'shrink-0 w-9 h-9 rounded-md bg-zinc-800 text-zinc-400 flex items-center justify-center'
+                : 'shrink-0 w-9 h-9 rounded-md bg-indigo-500/15 text-indigo-300 flex items-center justify-center';
+            const btnCls = isBlank
+                ? 'tpl-use-btn mt-auto rounded-md px-3 py-1.5 text-xs font-semibold border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 self-start transition-colors'
+                : 'tpl-use-btn mt-auto rounded-md px-3 py-1.5 text-xs font-semibold bg-indigo-500 hover:bg-indigo-400 text-white self-start transition-colors';
+            const btnLabel = isBlank ? 'Start blank' : 'Use this template';
+            return `
+            <div class="${tileCls}">
+                <div class="flex items-start gap-3">
+                    <span class="${iconCls}">
+                        ${TEMPLATE_ICONS[t.icon] || TEMPLATE_ICONS.film}
+                    </span>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-sm font-semibold text-zinc-100">${t.displayName}</div>
+                        <div class="text-[11px] uppercase tracking-wide text-zinc-500 mt-0.5">${t.tagline}</div>
+                    </div>
+                </div>
+                <p class="text-xs text-zinc-400 leading-relaxed flex-1">${t.description}</p>
+                <button type="button" data-template-id="${t.id}" class="${btnCls}">
+                    ${btnLabel}
+                </button>
+            </div>`;
+        }).join('');
+        listEl.querySelectorAll('.tpl-use-btn').forEach(btn => {
+            btn.addEventListener('click', () => applyTemplate(btn.getAttribute('data-template-id'), btn));
+        });
+    }
+
+    async function applyTemplate(templateId, btn) {
+        const tpl = RULE_TEMPLATES.find(t => t.id === templateId);
+        if (!tpl) return;
+        // Blank tile: hand off to the classic name-prompt dialog.
+        if (tpl.blank) {
+            document.getElementById('template-dialog').close();
+            const createDlg = document.getElementById('create-dialog');
+            const nameInput = document.getElementById('new-rule-name');
+            if (nameInput) nameInput.value = '';
+            if (createDlg && typeof createDlg.showModal === 'function') createDlg.showModal();
+            return;
+        }
+        const originalLabel = btn ? btn.textContent : '';
+        if (btn) {
+            btn.disabled = true;
+            btn.classList.add('opacity-60', 'cursor-not-allowed');
+            btn.textContent = 'Creating...';
+        }
+        try {
+            // Auto-suffix if name already exists. Backend returns 409 on dup.
+            let attemptName = tpl.payload.name;
+            let suffix = 2;
+            let resp;
+            const maxAttempts = 6;
+            for (let i = 0; i < maxAttempts; i++) {
+                const body = {
+                    ...tpl.payload,
+                    name: attemptName,
+                    criteria: { ...tpl.payload.criteria },
+                };
+                resp = await fetch('/api/collections', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(body),
+                });
+                if (resp.ok) break;
+                if (resp.status !== 409) {
+                    const err = await resp.json().catch(() => ({}));
+                    throw new Error(err.detail || ('HTTP ' + resp.status));
+                }
+                attemptName = tpl.payload.name + ' ' + suffix++;
+            }
+            if (!resp || !resp.ok) {
+                throw new Error('Rule name already exists');
+            }
+            const data = await resp.json();
+            const createdName = data.name || attemptName;
+            const slug = slugify(createdName);
+            document.getElementById('template-dialog').close();
+            showToast('Rule created from template', 'success');
+            window.location.href = '/rules/' + slug + '/settings';
+        } catch (err) {
+            showToast('Failed to create from template: ' + err.message, 'error');
+            if (btn) {
+                btn.disabled = false;
+                btn.classList.remove('opacity-60', 'cursor-not-allowed');
+                btn.textContent = originalLabel || 'Use this template';
+            }
+        }
+    }
+
+    function openTemplatePicker() {
+        renderTemplateList();
+        const dlg = document.getElementById('template-dialog');
+        if (dlg && typeof dlg.showModal === 'function') dlg.showModal();
+    }
+    window.openTemplatePicker = openTemplatePicker;
+
+    function render(data, settings) {
+        const collections = data.collections || {};
+        const colNames = Object.keys(collections);
+        const totalBytes = data.total_size_bytes || 0;
+        const schedHour = settings.schedule_hour != null ? settings.schedule_hour : 2;
+        const schedMin = settings.schedule_minute != null ? settings.schedule_minute : 30;
+
+        // Subtitle
+        document.getElementById('dash-subtitle').textContent =
+            `${colNames.length} rule${colNames.length !== 1 ? 's' : ''} configured \u00b7 Next scheduled ${nextScheduledRun(schedHour, schedMin)}`;
+
+        // KPI Cards
+        const lastRunTime = data.last_run ? formatRelativeTime(data.last_run.timestamp) : 'Never';
+        const lastRunFull = data.last_run ? (() => {
+            const ts = data.last_run.timestamp;
+            const s = (ts.includes('T') ? ts : ts.replace(' ', 'T')) + (ts.includes('Z') || ts.includes('+') ? '' : 'Z');
+            return new Date(s).toLocaleString();
+        })() : '';
+
+        const pendingColor = data.pending_actions > 0 ? 'text-rose-500' : 'text-zinc-100';
+
+        document.getElementById('kpi-cards').innerHTML = `
+            <div class="bg-zinc-900 rounded-lg p-4 border border-zinc-800">
+                <small class="text-zinc-400 text-xs">Tracked Items</small>
+                <div class="text-4xl font-bold leading-tight text-zinc-100">${data.total_tracked}</div>
+                <small class="text-zinc-400 text-xs">across ${colNames.length} rule${colNames.length !== 1 ? 's' : ''}${totalBytes > 0 ? ' &middot; ' + formatBytes(totalBytes) : ''}</small>
+            </div>
+            <div class="bg-zinc-900 rounded-lg p-4 border border-zinc-800">
+                <small class="text-zinc-400 text-xs">Pending Actions</small>
+                <div class="text-4xl font-bold leading-tight ${pendingColor}">${data.pending_actions}</div>
+                <small class="text-zinc-400 text-xs">staged across all rules</small>
+            </div>
+            <div class="bg-zinc-900 rounded-lg p-4 border border-zinc-800">
+                <small class="text-zinc-400 text-xs">Last Run</small>
+                <div class="text-4xl font-bold leading-tight text-zinc-100" ${lastRunFull ? 'title="' + lastRunFull + '"' : ''}>${lastRunTime}</div>
+                <small class="text-zinc-400 text-xs">Next scheduled ${nextScheduledRun(schedHour, schedMin)}</small>
+            </div>`;
+
+        // Rules Table / Empty State
+        const tableEl = document.getElementById('collections-table');
+        const newRuleRow = document.getElementById('new-rule-row');
+        if (colNames.length === 0) {
+            tableEl.innerHTML = renderEmptyState();
+            if (newRuleRow) newRuleRow.classList.add('hidden');
+            const tplBtn = document.getElementById('empty-template-btn');
+            if (tplBtn) {
+                tplBtn.addEventListener('click', () => openTemplatePicker());
+            }
+            return;
+        }
+        if (newRuleRow) newRuleRow.classList.remove('hidden');
+
+        // Build an array the table can sort on. Keep the stats object in
+        // each entry so subsequent renders don't need to refetch.
+        const ruleList = colNames.map(name => {
+            const stats = collections[name];
+            return {
+                name,
+                slug: slugify(name),
+                items: (stats.staged || 0) + (stats.actioned || 0) + (stats.migrated || 0) + (stats.kept || 0),
+                pending: stats.staged || 0,
+                bytes: stats.total_bytes || 0,
+                grace_days: stats.grace_days != null ? stats.grace_days : 30,
+                action_pipeline: stats.action_pipeline,
+                enabled: stats.enabled !== false,
+                priority: stats.priority != null ? stats.priority : 100,
+            };
+        });
+        cachedRuleList = ruleList;
+
+        renderRulesTable(tableEl, ruleList, data, totalBytes);
+        checkRunStatus();
+    }
+
+    // Client-side sort state for the rules table.
+    let cachedRuleList = [];
+    let rulesSort = { col: null, dir: 'asc' };
+
+    function cmp(a, b) { return a < b ? -1 : (a > b ? 1 : 0); }
+
+    function sortedRuleList(list) {
+        if (!rulesSort.col) return list;
+        const col = rulesSort.col;
+        const dir = rulesSort.dir === 'desc' ? -1 : 1;
+        return [...list].sort((a, b) => {
+            let av = a[col], bv = b[col];
+            if (col === 'name') { av = String(av).toLowerCase(); bv = String(bv).toLowerCase(); }
+            return dir * cmp(av, bv);
+        });
+    }
+
+    function sortArrow(col) {
+        if (rulesSort.col !== col) return '<span class="ml-1 text-[0.65rem] text-zinc-600">&#9650;</span>';
+        const arrow = rulesSort.dir === 'asc' ? '&#9650;' : '&#9660;';
+        return `<span class="ml-1 text-[0.65rem] text-zinc-100">${arrow}</span>`;
+    }
+
+    function renderRulesTable(tableEl, ruleList, data, totalBytes) {
+        const sorted = sortedRuleList(ruleList);
+        let totals = { items: 0, pending: 0, bytes: 0 };
+        let rows = '';
+        for (const r of sorted) {
+            const size = formatBytes(r.bytes);
+            const action = pipelineLabel(r.action_pipeline);
+            const grace = r.grace_days + 'd';
+
+            totals.items += r.items;
+            totals.pending += r.pending;
+            totals.bytes += r.bytes;
+
+            rows += `<tr class="border-b border-zinc-800" data-rule-name="${r.name.replace(/"/g, '&quot;')}">
+                <td class="py-2 px-3">
+                    <a href="/rules/${encodeURIComponent(r.slug)}" class="text-indigo-400 hover:text-indigo-300 no-underline">${r.name}</a>
+                    <a href="/rules/${encodeURIComponent(r.slug)}/settings" title="Settings" class="ml-2 text-zinc-500 hover:text-zinc-300 no-underline align-middle inline-flex"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg></a>
+                </td>
+                <td class="py-2 px-3 text-right tabular-nums text-zinc-100">${r.items}</td>
+                <td class="py-2 px-3 text-right tabular-nums">${r.pending > 0 ? '<span class="text-rose-500">' + r.pending + '</span>' : '<span class="text-zinc-100">0</span>'}</td>
+                <td class="py-2 px-3 text-right tabular-nums">${size || '<span class="text-zinc-500">-</span>'}</td>
+                <td class="py-2 px-3 text-center text-zinc-300">${grace}</td>
+                <td class="py-2 px-3 text-right">
+                    <input type="number" value="${r.priority}" min="0" step="1"
+                           data-priority-input data-rule-name="${r.name.replace(/"/g, '&quot;')}"
+                           class="w-16 rounded-md bg-zinc-900 border border-zinc-700 text-zinc-100 text-right px-2 py-0.5 text-xs tabular-nums focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                           title="Lower runs first. Click to edit.">
+                </td>
+                <td class="py-2 px-3">${action}</td>
+                <td class="py-2 px-3">${r.enabled ? '<span class="inline-flex px-2 py-0.5 rounded-md text-xs font-semibold bg-emerald-500/15 text-emerald-500">Enabled</span>' : '<span class="inline-flex px-2 py-0.5 rounded-md text-xs font-semibold bg-zinc-500/15 text-zinc-400">Disabled</span>'}</td>
+            </tr>`;
+        }
+
+        tableEl.innerHTML = `
+            <div class="overflow-x-auto">
+            <table class="w-full text-sm">
+                <thead>
+                    <tr class="border-b-2 border-zinc-700 text-zinc-400">
+                        <th class="py-2 px-3 text-left font-medium cursor-pointer select-none hover:text-zinc-200" data-sort-col="name">Rule${sortArrow('name')}</th>
+                        <th class="py-2 px-3 text-right font-medium cursor-pointer select-none hover:text-zinc-200" data-sort-col="items">Items${sortArrow('items')}</th>
+                        <th class="py-2 px-3 text-right font-medium cursor-pointer select-none hover:text-zinc-200" data-sort-col="pending">Pending${sortArrow('pending')}</th>
+                        <th class="py-2 px-3 text-right font-medium cursor-pointer select-none hover:text-zinc-200" data-sort-col="bytes">Size${sortArrow('bytes')}</th>
+                        <th class="py-2 px-3 text-center font-medium cursor-pointer select-none hover:text-zinc-200" data-sort-col="grace_days">Grace${sortArrow('grace_days')}</th>
+                        <th class="py-2 px-3 text-right font-medium cursor-pointer select-none hover:text-zinc-200" data-sort-col="priority" title="Lower priority runs first">Priority${sortArrow('priority')}</th>
+                        <th class="py-2 px-3 text-left font-medium">Actions</th>
+                        <th class="py-2 px-3 text-left font-medium">Status</th>
+                    </tr>
+                </thead>
+                <tbody class="divide-y divide-zinc-800">
+                    ${rows}
+                    <tr class="border-t-2 border-zinc-700 font-semibold text-zinc-100">
+                        <td class="py-2 px-3">Total (unique)</td>
+                        <td class="py-2 px-3 text-right tabular-nums">${data.total_tracked}</td>
+                        <td class="py-2 px-3 text-right tabular-nums">${data.pending_actions}</td>
+                        <td class="py-2 px-3 text-right tabular-nums">${formatBytes(totalBytes) || '-'}</td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                        <td></td>
+                    </tr>
+                </tbody>
+            </table>
+            </div>`;
+
+        // Wire sortable headers
+        tableEl.querySelectorAll('th[data-sort-col]').forEach(th => {
+            th.addEventListener('click', () => {
+                const col = th.getAttribute('data-sort-col');
+                if (rulesSort.col === col) {
+                    rulesSort.dir = rulesSort.dir === 'asc' ? 'desc' : 'asc';
+                } else {
+                    rulesSort.col = col;
+                    rulesSort.dir = col === 'priority' ? 'asc' : 'asc';
+                }
+                renderRulesTable(tableEl, cachedRuleList, data, totalBytes);
+            });
+        });
+
+        // Wire priority inputs to persist changes via
+        // PUT /api/collections/<name>/config { priority: N }
+        tableEl.querySelectorAll('input[data-priority-input]').forEach(inp => {
+            inp.addEventListener('click', e => e.stopPropagation());
+            inp.addEventListener('change', async () => {
+                const name = inp.getAttribute('data-rule-name');
+                const val = parseInt(inp.value, 10);
+                if (Number.isNaN(val) || val < 0) {
+                    showToast('Priority must be a non-negative integer', 'error');
+                    return;
+                }
+                const originalBorder = inp.style.borderColor;
+                inp.disabled = true;
+                try {
+                    const resp = await fetch(`/api/collections/${encodeURIComponent(name)}/config`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ priority: val }),
+                    });
+                    if (!resp.ok) {
+                        const err = await resp.json().catch(() => ({}));
+                        throw new Error(err.detail || ('HTTP ' + resp.status));
+                    }
+                    // Update local cache so a re-sort uses the new value.
+                    const row = cachedRuleList.find(r => r.name === name);
+                    if (row) row.priority = val;
+                    showToast('Priority updated', 'success');
+                } catch (err) {
+                    showToast('Failed to update priority: ' + err.message, 'error');
+                } finally {
+                    inp.disabled = false;
+                    inp.style.borderColor = originalBorder;
+                }
+            });
+        });
+    }
+
+    // --- Run management ---
+    let pollTimer = null;
+    let currentRunMode = null; // true=dry, false=live (reflects active run)
+
+    function checkRunStatus() {
+        fetch('/api/run/progress')
+            .then(r => r.json())
+            .then(d => {
+                if (d.running) {
+                    // Best-effort: infer mode from last_result if it's the same run, else default to live (safe: show amber banner)
+                    currentRunMode = (d.last_result && typeof d.last_result.dry_run === 'boolean') ? d.last_result.dry_run : null;
+                    showProgress(d, currentRunMode);
+                    setButtonsDisabled(true);
+                    startPolling();
+                }
+            })
+            .catch(() => {});
+    }
+
+    function phaseLabel(phase) {
+        const labels = {
+            'fetching_plex': 'Fetching from Plex',
+            'fetching_radarr': 'Fetching from Radarr',
+            'fetching_sonarr': 'Fetching from Sonarr',
+            'fetching_sessions': 'Fetching watch history',
+            'fetching_overseerr': 'Fetching from Seerr',
+            'fetching_jellyfin': 'Fetching from Jellyfin',
+            'loading_db_plays': 'Loading watch history',
+            'fetching_seasons': 'Fetching seasons',
+            'fetching_ratings': 'Fetching ratings',
+            'building_context': 'Building context',
+            'processing_collection': 'Processing rule',
+            'syncing_collections': 'Syncing collections',
+            'executing_actions': 'Running actions',
+            'syncing_users': 'Syncing users',
+            'finalizing': 'Finalizing',
+        };
+        if (labels[phase]) return labels[phase];
+        // Fallback: turn an unknown snake_case phase into a human sentence.
+        if (!phase) return 'Starting';
+        return phase.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+    }
+
+    function showProgress(prog, isDry) {
+        const el = document.getElementById('run-progress');
+        el.classList.remove('hidden');
+
+        // Color-code banner + pill by run mode
+        let wrapCls = 'mb-4 px-4 py-3 rounded-lg border';
+        let modeLine = '';
+        if (isDry === true) {
+            wrapCls += ' bg-indigo-500/10 border-indigo-500/20';
+            modeLine = `<span class="inline-flex px-2 py-0.5 rounded-md text-[0.65rem] font-semibold uppercase tracking-wide bg-indigo-500/20 text-indigo-300">Dry run - no changes</span>`;
+        } else if (isDry === false) {
+            wrapCls += ' bg-amber-500/10 border-amber-500/30';
+            modeLine = `<span class="inline-flex px-2 py-0.5 rounded-md text-[0.65rem] font-semibold uppercase tracking-wide bg-amber-500/20 text-amber-300">Live run - applying actions</span>`;
+        } else {
+            wrapCls += ' bg-zinc-700/30 border-zinc-600/40';
+            modeLine = `<span class="text-zinc-400 text-xs font-semibold">Run in progress</span>`;
+        }
+        el.className = wrapCls;
+
+        const spinnerColor = isDry === false ? 'text-amber-400' : 'text-indigo-400';
+        el.innerHTML = `
+            <div class="flex items-center gap-3 mb-1">
+                <svg class="w-5 h-5 shrink-0 animate-spin ${spinnerColor}" viewBox="0 0 24 24" fill="none">
+                    <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-opacity="0.2"/>
+                    <path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/>
+                </svg>
+                <div class="flex-1">
+                    <div class="flex items-center gap-2 flex-wrap">
+                        <strong class="text-zinc-100">${phaseLabel(prog.phase)}</strong>
+                        ${modeLine}
+                    </div>
+                    <small class="block text-zinc-400">${prog.detail || 'Initializing...'}</small>
+                </div>
+                <small class="text-zinc-400">${prog.items_total > 0 ? prog.items_processed + ' / ' + prog.items_total : ''}</small>
+            </div>
+            <progress value="${prog.percent || 0}" max="100" class="w-full"></progress>`;
+    }
+
+    function setButtonsDisabled(disabled) {
+        btnDry.disabled = disabled;
+        btnRun.disabled = disabled;
+        if (disabled) {
+            btnDry.classList.add('opacity-50', 'cursor-not-allowed');
+            btnRun.classList.add('opacity-50', 'cursor-not-allowed');
+        } else {
+            btnDry.classList.remove('opacity-50', 'cursor-not-allowed');
+            btnRun.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+    }
+
+    function startPolling() {
+        if (pollTimer) return;
+        pollTimer = setInterval(() => {
+            fetch('/api/run/progress')
+                .then(r => r.json())
+                .then(d => {
+                    if (!d.running) {
+                        clearInterval(pollTimer);
+                        pollTimer = null;
+                        setButtonsDisabled(false);
+                        const el = document.getElementById('run-progress');
+                        const lr = d.last_result || {};
+                        const isDry = lr.dry_run ? 'Dry run' : 'Run';
+                        const added = lr.added || 0;
+                        const removed = lr.removed || 0;
+                        const parts = [];
+                        if (added > 0) parts.push(added + ' item' + (added !== 1 ? 's' : '') + ' added');
+                        if (removed > 0) parts.push(removed + ' item' + (removed !== 1 ? 's' : '') + ' removed');
+                        const summary = parts.length ? parts.join(', ') : 'no changes';
+                        el.className = 'mb-4 px-4 py-3 rounded-lg bg-emerald-500/10 border border-emerald-500/20';
+                        el.innerHTML = `
+                            <div class="flex items-center gap-3">
+                                <strong class="text-emerald-500">${isDry} completed</strong>
+                                <span class="text-zinc-400">${summary}</span>
+                                <a href="/logs" class="ml-auto text-xs text-indigo-400 hover:text-indigo-300">View logs</a>
+                                <button onclick="location.reload()" class="rounded-md px-2 py-1 text-xs font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent">Refresh</button>
+                            </div>`;
+                        showToast(isDry + ' completed: ' + summary, 'success');
+                        currentRunMode = null;
+                    } else {
+                        showProgress(d, currentRunMode);
+                    }
+                })
+                .catch(() => {});
+        }, 2000);
+    }
+
+    function triggerRun(dryRun) {
+        currentRunMode = dryRun;
+        // Immediate banner so user sees dry/live mode right away
+        showProgress({ phase: '', detail: 'Starting...', percent: 0, items_processed: 0, items_total: 0 }, dryRun);
+        fetch(`/api/run?dry_run=${dryRun}`, { method: 'POST' })
+            .then(r => r.json())
+            .then(d => {
+                if (d.status === 'started' || d.status === 'already_running') {
+                    setButtonsDisabled(true);
+                    startPolling();
+                    showToast(dryRun ? 'Dry run started' : 'Live run started', dryRun ? 'info' : 'info');
+                } else {
+                    showToast('Run failed to start', 'error');
+                }
+            })
+            .catch(err => {
+                const el = document.getElementById('run-progress');
+                el.classList.remove('hidden');
+                el.className = 'mb-4 px-4 py-3 rounded-lg bg-rose-500/10 border border-rose-500/20';
+                el.innerHTML = `
+                    <div class="text-rose-500">
+                        Failed to start run: ${err.message}
+                    </div>`;
+                showToast('Run failed: ' + err.message, 'error');
+            });
+    }
+
+    // --- Kebab menu: Import / Export rules ---
+    const kebabBtn = document.getElementById('btn-kebab');
+    const kebabMenu = document.getElementById('kebab-menu');
+    const importFileInput = document.getElementById('import-file-input');
+    const importDialog = document.getElementById('import-dialog');
+
+    function closeKebab() {
+        if (!kebabMenu) return;
+        kebabMenu.classList.add('hidden');
+        if (kebabBtn) kebabBtn.setAttribute('aria-expanded', 'false');
+    }
+    function toggleKebab() {
+        if (!kebabMenu) return;
+        const open = !kebabMenu.classList.contains('hidden');
+        if (open) {
+            closeKebab();
+        } else {
+            kebabMenu.classList.remove('hidden');
+            if (kebabBtn) kebabBtn.setAttribute('aria-expanded', 'true');
+        }
+    }
+    if (kebabBtn) {
+        kebabBtn.addEventListener('click', e => { e.stopPropagation(); toggleKebab(); });
+    }
+    document.addEventListener('click', (e) => {
+        if (!kebabMenu || kebabMenu.classList.contains('hidden')) return;
+        if (e.target.closest('#kebab-menu') || e.target.closest('#btn-kebab')) return;
+        closeKebab();
+    });
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && kebabMenu && !kebabMenu.classList.contains('hidden')) closeKebab();
+    });
+
+    // Export: GET /api/collections/export, trigger download as
+    // mcm-rules-YYYY-MM-DD.json.
+    const kebabExportBtn = document.getElementById('kebab-export');
+    if (kebabExportBtn) {
+        kebabExportBtn.addEventListener('click', async () => {
+            closeKebab();
+            try {
+                const resp = await fetch('/api/collections/export');
+                if (!resp.ok) {
+                    const err = await resp.json().catch(() => ({}));
+                    throw new Error(err.detail || ('HTTP ' + resp.status));
+                }
+                const payload = await resp.json();
+                const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const today = new Date().toISOString().slice(0, 10);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `mcm-rules-${today}.json`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                URL.revokeObjectURL(url);
+                const n = Array.isArray(payload.rules) ? payload.rules.length : 0;
+                showToast(`Exported ${n} rule${n === 1 ? '' : 's'}`, 'success');
+            } catch (err) {
+                showToast('Export failed: ' + err.message, 'error');
+            }
+        });
+    }
+
+    // Import: trigger the hidden file input; on file select, validate JSON
+    // client-side and open the confirmation dialog.
+    const kebabImportBtn = document.getElementById('kebab-import');
+    if (kebabImportBtn) {
+        kebabImportBtn.addEventListener('click', () => {
+            closeKebab();
+            if (importFileInput) {
+                importFileInput.value = '';
+                importFileInput.click();
+            }
+        });
+    }
+
+    // Parsed import payload + filename, held between file-select and confirm.
+    let pendingImport = null;
+
+    if (importFileInput) {
+        importFileInput.addEventListener('change', async () => {
+            const file = importFileInput.files && importFileInput.files[0];
+            if (!file) return;
+            try {
+                const text = await file.text();
+                const parsed = JSON.parse(text);
+                if (!parsed || !Array.isArray(parsed.rules)) {
+                    throw new Error('File is missing a "rules" array');
+                }
+                pendingImport = { payload: parsed, filename: file.name };
+                const countEl = document.getElementById('import-count');
+                const fnEl = document.getElementById('import-filename');
+                if (countEl) countEl.textContent = parsed.rules.length;
+                if (fnEl) fnEl.textContent = file.name;
+                // Reset radios + warning to default
+                const mergeRadio = importDialog.querySelector('input[name="import-mode"][value="merge"]');
+                if (mergeRadio) mergeRadio.checked = true;
+                const warn = document.getElementById('import-replace-warning');
+                if (warn) warn.classList.add('hidden');
+                if (importDialog && typeof importDialog.showModal === 'function') importDialog.showModal();
+            } catch (err) {
+                showToast('Invalid import file: ' + err.message, 'error');
+            }
+        });
+    }
+
+    // Show/hide the "cannot be undone" warning as the mode changes.
+    if (importDialog) {
+        importDialog.querySelectorAll('input[name="import-mode"]').forEach(r => {
+            r.addEventListener('change', () => {
+                const warn = document.getElementById('import-replace-warning');
+                if (!warn) return;
+                const mode = importDialog.querySelector('input[name="import-mode"]:checked')?.value;
+                warn.classList.toggle('hidden', mode !== 'replace');
+            });
+        });
+        const cancelBtn = document.getElementById('import-cancel-btn');
+        if (cancelBtn) cancelBtn.addEventListener('click', () => importDialog.close());
+        const confirmBtn = document.getElementById('import-confirm-btn');
+        if (confirmBtn) {
+            confirmBtn.addEventListener('click', async () => {
+                if (!pendingImport) return;
+                const mode = importDialog.querySelector('input[name="import-mode"]:checked')?.value || 'merge';
+                confirmBtn.disabled = true;
+                confirmBtn.classList.add('opacity-60', 'cursor-not-allowed');
+                try {
+                    const body = { ...pendingImport.payload, mode };
+                    const resp = await fetch('/api/collections/import', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(body),
+                    });
+                    const data = await resp.json().catch(() => ({}));
+                    if (!resp.ok) throw new Error(data.detail || ('HTTP ' + resp.status));
+                    importDialog.close();
+                    // Render a succinct result toast based on the response
+                    // shape. Backend details are speculative; fall back to a
+                    // generic message if the expected fields aren't present.
+                    let msg;
+                    if (mode === 'replace') {
+                        const replaced = (typeof data.replaced === 'number') ? data.replaced
+                                        : (typeof data.imported === 'number') ? data.imported
+                                        : (pendingImport.payload.rules || []).length;
+                        msg = `Replaced all rules (${replaced} imported)`;
+                    } else {
+                        const imported = (typeof data.imported === 'number') ? data.imported : 0;
+                        const skipped = (typeof data.skipped === 'number') ? data.skipped : 0;
+                        const parts = [];
+                        parts.push(`Imported ${imported} rule${imported === 1 ? '' : 's'}`);
+                        if (skipped > 0) parts.push(`skipped ${skipped} existing rule${skipped === 1 ? '' : 's'}`);
+                        msg = parts.join(', ');
+                    }
+                    showToast(msg, 'success');
+                    pendingImport = null;
+                    // Refetch the dashboard so the table reflects the new rules.
+                    fetch('/api/dashboard').then(r => r.json()).then(d => {
+                        cachedDashboard = d;
+                        fetch('/api/settings').then(r => r.json()).then(s => render(d, s));
+                    }).catch(() => location.reload());
+                } catch (err) {
+                    showToast('Import failed: ' + err.message, 'error');
+                } finally {
+                    confirmBtn.disabled = false;
+                    confirmBtn.classList.remove('opacity-60', 'cursor-not-allowed');
+                }
+            });
+        }
+    }
+
+    // --- Create Rule ---
+    window.createRule = async function(e) {
+        e.preventDefault();
+        const name = document.getElementById('new-rule-name').value.trim();
+        if (!name) return false;
+        const btn = document.getElementById('create-submit-btn');
+        btn.disabled = true;
+        btn.classList.add('opacity-50', 'cursor-not-allowed');
+        try {
+            const resp = await fetch('/api/collections', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ name }),
+            });
+            if (!resp.ok) {
+                const err = await resp.json().catch(() => ({}));
+                throw new Error(err.detail || 'HTTP ' + resp.status);
+            }
+            const data = await resp.json();
+            const slug = slugify(data.name || name);
+            document.getElementById('create-dialog').close();
+            showToast('Rule created', 'success');
+            window.location.href = '/rules/' + slug + '/settings';
+        } catch (err) {
+            showToast('Failed to create rule: ' + err.message, 'error');
+            btn.disabled = false;
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+        return false;
+    };
+})();
+</script>
+{% endblock %}

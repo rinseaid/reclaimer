@@ -1,0 +1,871 @@
+{% extends "base.html" %}
+{% block title %}{% if rating_key %}Item Detail{% else %}Item Lookup{% endif %}{% endblock %}
+{% block content %}
+
+<div class="mb-6">
+    <input type="search" id="item-search" placeholder="Search for any movie or TV show..."
+           autocomplete="off"
+           class="w-full max-w-md bg-zinc-900 border border-zinc-700 rounded-md px-3 py-2 text-zinc-100 placeholder-zinc-500 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 focus:outline-none">
+    <div id="search-results" class="hidden relative">
+        <div id="search-results-list" class="absolute top-0 left-0 right-0 max-h-72 overflow-y-auto bg-zinc-900 border border-zinc-700 rounded-md z-50"></div>
+    </div>
+</div>
+
+<div id="item-data"><p class="text-zinc-400 animate-pulse">Loading item...</p></div>
+
+<!-- Toast container -->
+<div id="toast-container" class="fixed top-4 right-4 z-[100] flex flex-col gap-2 pointer-events-none"></div>
+
+<!-- Delete confirmation dialog -->
+<dialog id="delete-dialog" class="bg-zinc-900 border border-zinc-700 rounded-lg p-0 backdrop:bg-black/60 max-w-sm w-full">
+    <div class="p-6">
+        <h3 class="text-lg font-semibold text-zinc-100 mb-3">Confirm Delete</h3>
+        <p class="text-zinc-300 mb-6">Delete this item? This cannot be undone.</p>
+        <div class="flex gap-3">
+            <button class="flex-1 px-4 py-2 rounded-md border border-zinc-700 text-zinc-300 hover:bg-zinc-800 transition-colors"
+                    onclick="document.getElementById('delete-dialog').close()">Cancel</button>
+            <button id="confirm-delete-btn"
+                    class="flex-1 px-4 py-2 rounded-md bg-rose-600 text-white font-medium hover:bg-rose-500 transition-colors">Delete</button>
+        </div>
+    </div>
+</dialog>
+
+<script>
+/* Shared toast helper */
+window.showToast = function(message, kind) {
+    kind = kind || 'success';
+    const palette = {
+        success: 'bg-emerald-500/15 border-emerald-500/40 text-emerald-300',
+        error:   'bg-rose-500/15 border-rose-500/40 text-rose-300',
+        info:    'bg-sky-500/15 border-sky-500/40 text-sky-300',
+    };
+    const cls = palette[kind] || palette.success;
+    const container = document.getElementById('toast-container');
+    if (!container) return;
+    const toast = document.createElement('div');
+    toast.className = `pointer-events-auto px-4 py-2.5 rounded-md border text-sm font-medium shadow-lg transition-all duration-200 opacity-0 translate-y-[-6px] ${cls}`;
+    toast.textContent = message;
+    container.appendChild(toast);
+    requestAnimationFrame(() => {
+        toast.classList.remove('opacity-0', 'translate-y-[-6px]');
+    });
+    setTimeout(() => {
+        toast.classList.add('opacity-0', 'translate-y-[-6px]');
+        setTimeout(() => toast.remove(), 250);
+    }, 3000);
+};
+
+const ratingKey = "{{ rating_key }}";
+
+if (!ratingKey) {
+    document.getElementById('item-data').innerHTML = '<p class="text-zinc-500">Search for a movie or TV show above to see its details and rule evaluation.</p>';
+}
+
+function formatBytes(bytes) {
+    if (!bytes) return '-';
+    if (bytes >= 1099511627776) return (bytes / 1099511627776).toFixed(1) + ' TB';
+    return (bytes / 1073741824).toFixed(1) + ' GB';
+}
+
+const fmtDate = (d) => d ? new Date(d).toLocaleDateString(undefined, {year:'numeric',month:'short',day:'numeric'}) : '-';
+function formatDuration(seconds) {
+    if (!seconds || seconds <= 0) return '--';
+    const h = Math.floor(seconds / 3600);
+    const m = Math.floor((seconds % 3600) / 60);
+    if (h > 0) return h + 'h ' + m + 'm';
+    return m + 'm';
+}
+// watch_history timestamps are server local time - parse as-is
+const fmtDateTime = (d) => d ? new Date(d).toLocaleString('en-AU', {year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'}) : '-';
+// activity_log and debrid_cache timestamps are UTC - append Z so the browser converts to local time
+function fmtDateTimeUTC(d) {
+    if (!d) return '-';
+    const s = (d.includes('T') ? d : d.replace(' ', 'T')) + (d.includes('Z') || d.includes('+') ? '' : 'Z');
+    return new Date(s).toLocaleString('en-AU', {year:'numeric',month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+}
+
+if (ratingKey) {
+Promise.all([
+    fetch(`/api/items/${ratingKey}`).then(r => r.json()),
+    fetch('/api/settings').then(r => r.json()).catch(() => ({})),
+    fetch('/api/settings/plex-libraries').then(r => r.json()).catch(() => ({})),
+    fetch('/api/instances').then(r => r.json()).catch(() => ({instances: []})),
+])
+.then(async ([data, settings, plexInfo, instancesData]) => {
+        // Fold default instance URLs into settings for the service-link logic
+        // below. Keeps the template short without adding conditional branches.
+        const _instances = (instancesData && instancesData.instances) || [];
+        const _defaultOf = (kind) => _instances.find(i => i.kind === kind && i.is_default) || _instances.find(i => i.kind === kind);
+        const _radarrInst = _defaultOf('radarr');
+        const _sonarrInst = _defaultOf('sonarr');
+        settings.radarr_url = _radarrInst ? _radarrInst.url : '';
+        settings.radarr_public_url = _radarrInst ? (_radarrInst.public_url || '') : '';
+        settings.sonarr_url = _sonarrInst ? _sonarrInst.url : '';
+        settings.sonarr_public_url = _sonarrInst ? (_sonarrInst.public_url || '') : '';
+        const target = document.getElementById('item-data');
+
+        if (data.error) {
+            target.innerHTML = `
+                <nav class="text-sm mb-2" aria-label="breadcrumb">
+                    <a href="/rules" class="text-sky-500 hover:text-sky-400">Rules</a>
+                    <span class="text-zinc-500 mx-1">/</span>
+                    <span class="text-zinc-400">Item ${ratingKey}</span>
+                </nav>
+                <div class="text-center py-12 px-4 border-2 border-dashed border-zinc-700 rounded-lg">
+                    <h3 class="text-xl font-semibold text-zinc-100 mb-2">Item Not Found</h3>
+                    <p class="text-zinc-400 mb-6">${data.error}</p>
+                    <p class="text-zinc-500 text-sm">This item may have been removed from Plex, or the rating key may be invalid.</p>
+                    <a href="/search" class="inline-block mt-4 px-4 py-2 rounded-md border border-zinc-600 text-zinc-300 hover:bg-zinc-800 transition-colors">Search for an item</a>
+                </div>`;
+            return;
+        }
+
+        const entry = data.entries[0] || {};
+        const collection = entry.collection || '';
+        const collectionSlug = collection.toLowerCase().replace(/ /g, '-');
+
+        // Fetch collection config for the action
+        let collectionAction = 'none';
+        if (collection) {
+            try {
+                const cfgResp = await fetch(`/api/collections/${encodeURIComponent(collectionSlug)}/config`);
+                if (cfgResp.ok) {
+                    const cfg = await cfgResp.json();
+                    collectionAction = cfg.action || 'none';
+                }
+            } catch(e) {}
+        }
+
+        const ACTION_LABELS = { none: 'No action', delete: 'Delete', unmonitor: 'Unmonitor' };
+        const STATUS_LABELS = { staged: 'Pending removal', actioned: 'Removed', migrated: 'Migrated', kept: 'Kept' };
+
+        // Grace calculation
+        const now = new Date();
+        const graceDate = entry.grace_expires ? new Date(entry.grace_expires) : null;
+        const graceExpired = graceDate && graceDate < now;
+        let graceText = '-';
+        if (graceDate) {
+            const dateStr = fmtDate(entry.grace_expires);
+            if (graceExpired) {
+                graceText = `${dateStr} <span class="text-xs text-rose-500">(expired - action: ${ACTION_LABELS[collectionAction] || collectionAction})</span>`;
+            } else {
+                const daysLeft = Math.ceil((graceDate - now) / 86400000);
+                graceText = `${dateStr} <span class="text-xs text-zinc-500">(${daysLeft} days left - then: ${ACTION_LABELS[collectionAction] || collectionAction})</span>`;
+            }
+        }
+
+        let html = '';
+
+        // Breadcrumb
+        html += `<nav class="text-sm mb-2" aria-label="breadcrumb">
+            <a href="/rules" class="text-sky-500 hover:text-sky-400">Rules</a>
+            <span class="text-zinc-500 mx-1">/</span>`;
+        if (collection) {
+            html += `<a href="/rules/${collectionSlug}" class="text-sky-500 hover:text-sky-400">${collection}</a><span class="text-zinc-500 mx-1">/</span>`;
+        }
+        // Strip " - Season N" (or legacy em-dash form) so the breadcrumb and
+        // heading can render show title + season on separate lines.
+        const rawTitle = entry.title || ratingKey;
+        const seasonNum = entry.season_number;
+        // Match both the ASCII-hyphen form (new) and U+2014 em-dash (legacy
+        // DB rows written before the em-dash purge) so historical seasons
+        // still split cleanly until the next full run rewrites their titles.
+        const showTitle = seasonNum != null
+            ? rawTitle.replace(/\s*[\u2014\-]\s*Season\s+\d+\s*$/i, '')
+            : rawTitle;
+        const breadcrumbTitle = seasonNum != null
+            ? `${showTitle} · Season ${seasonNum}`
+            : rawTitle;
+        html += `<span class="text-zinc-400">${breadcrumbTitle}</span>
+        </nav>`;
+
+        // Header with badges
+        const statusLabel = STATUS_LABELS[entry.status] || entry.status || 'unknown';
+        const statusClasses = {
+            kept: 'bg-emerald-500/15 text-emerald-500',
+            staged: 'bg-amber-500/15 text-amber-500',
+            actioned: 'bg-rose-500/15 text-rose-500',
+        };
+        const badgeClass = statusClasses[entry.status] || 'bg-zinc-700/40 text-zinc-400';
+
+        // Seasons and episodes have a parent show; wrap the poster + title in
+        // a link back to that show's detail page. Movies fall through with no link.
+        const showKey = entry.show_rating_key;
+        const posterImg = `<img src="/api/items/${ratingKey}/poster?size=md" loading="lazy" decoding="async" alt=""
+                 class="shrink-0 rounded-md w-[120px] h-[180px] object-cover bg-zinc-800 border border-zinc-800"
+                 onerror="this.style.visibility='hidden'">`;
+        const posterHtml = showKey
+            ? `<a href="/items/${showKey}" class="shrink-0" title="Go to parent show">${posterImg}</a>`
+            : posterImg;
+        const titleBlock = seasonNum != null
+            ? `<div class="flex flex-col">
+                <h2 class="text-2xl font-bold text-zinc-100 m-0 leading-tight">${showTitle}</h2>
+                <div class="text-sm text-zinc-400 mt-0.5">Season ${seasonNum}</div>
+              </div>`
+            : `<h2 class="text-2xl font-bold text-zinc-100 m-0">${showTitle}</h2>`;
+        const titleHtml = showKey
+            ? `<a href="/items/${showKey}" class="no-underline hover:opacity-80 transition-opacity" title="Go to parent show">${titleBlock}</a>`
+            : titleBlock;
+        let badgesHtml = `<span class="inline-flex px-2 py-0.5 rounded-md text-xs font-semibold ${badgeClass}">${statusLabel}</span>`;
+        if (entry.override) {
+            const overrideLabel = entry.override === 'keep' ? 'Manually kept' : entry.override === 'delete' ? 'Manually deleted' : entry.override;
+            badgesHtml += `<span class="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md text-xs font-semibold bg-amber-500/15 text-amber-500" title="Override is active: ${entry.override}">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                ${overrideLabel}
+                <button type="button" id="header-clear-override-btn"
+                        class="ml-1 px-1.5 py-0 rounded text-[0.65rem] font-semibold bg-amber-500/20 hover:bg-amber-500/30 text-amber-200 transition-colors"
+                        title="Remove the override so this item is subject to rule actions again"
+                        onclick="clearOverrideInline(this)">Clear override</button>
+            </span>`;
+        }
+        // Seasons stack the badges under the Season N line; non-seasons keep
+        // the badge(s) inline next to the title.
+        if (seasonNum != null) {
+            html += `<div class="flex items-start gap-4 mb-6">
+                ${posterHtml}
+                <div class="flex-1 flex flex-col gap-2">
+                    ${titleHtml}
+                    <div class="flex items-center gap-3 flex-wrap">${badgesHtml}</div>
+                </div>
+            </div>`;
+        } else {
+            html += `<div class="flex items-start gap-4 mb-6">
+                ${posterHtml}
+                <div class="flex-1 flex items-center gap-3 flex-wrap">
+                    ${titleHtml}
+                    ${badgesHtml}
+                </div>
+            </div>`;
+        }
+
+        // Info grid
+        html += `<div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+            <dl>
+                <dt class="text-zinc-500 text-xs uppercase tracking-wide mb-0.5">Media Type</dt>
+                <dd class="text-zinc-100 font-medium m-0">${entry.media_type || '-'}</dd>
+            </dl>
+            <dl>
+                <dt class="text-zinc-500 text-xs uppercase tracking-wide mb-0.5">Size</dt>
+                <dd class="text-zinc-100 font-medium m-0 tabular-nums">${formatBytes(entry.size_bytes)}</dd>
+            </dl>
+            <dl>
+                <dt class="text-zinc-500 text-xs uppercase tracking-wide mb-0.5">First Seen</dt>
+                <dd class="text-zinc-100 font-medium m-0">${fmtDate(entry.first_seen)}</dd>
+            </dl>
+            <dl>
+                <dt class="text-zinc-500 text-xs uppercase tracking-wide mb-0.5">Grace Expires</dt>
+                <dd class="text-zinc-100 font-medium m-0">${graceText}</dd>
+            </dl>
+        </div>`;
+
+        // Service links - rendered right after the info grid
+        const links = [];
+        const radarrUrl = settings.radarr_public_url || settings.radarr_url || '';
+        const sonarrUrl = settings.sonarr_public_url || settings.sonarr_url || '';
+        const overseerrUrl = settings.overseerr_public_url || settings.overseerr_url || '';
+        const jellyfinUrl = settings.jellyfin_public_url || settings.jellyfin_url || '';
+
+        // Plex - use app.plex.tv with machine identifier
+        const plexMachineId = plexInfo.machine_id || '';
+        if (entry.rating_key) {
+            links.push(`<a href="https://app.plex.tv/desktop/#!/server/${plexMachineId}/details?key=%2Flibrary%2Fmetadata%2F${entry.rating_key}" target="_blank" class="bg-zinc-800 hover:bg-zinc-700 rounded-md px-3 py-1 text-sm text-zinc-300 no-underline transition-colors">Plex</a>`);
+        }
+        // Jellyfin
+        if (jellyfinUrl && entry.rating_key) {
+            links.push(`<a href="${jellyfinUrl}/web/index.html#!/details?id=${entry.rating_key}" target="_blank" class="bg-zinc-800 hover:bg-zinc-700 rounded-md px-3 py-1 text-sm text-zinc-300 no-underline transition-colors">Jellyfin</a>`);
+        }
+        // Radarr
+        if (radarrUrl && entry.media_type === 'movie' && entry.arr_id) {
+            links.push(`<a href="${radarrUrl}/movie/${entry.arr_id}" target="_blank" class="bg-zinc-800 hover:bg-zinc-700 rounded-md px-3 py-1 text-sm text-zinc-300 no-underline transition-colors">Radarr</a>`);
+        }
+        // Sonarr
+        if (sonarrUrl && entry.media_type === 'show' && entry.arr_id) {
+            links.push(`<a href="${sonarrUrl}/series/${entry.arr_id}" target="_blank" class="bg-zinc-800 hover:bg-zinc-700 rounded-md px-3 py-1 text-sm text-zinc-300 no-underline transition-colors">Sonarr</a>`);
+        }
+        // Seerr
+        if (overseerrUrl && entry.tmdb_id) {
+            const seerrType = entry.media_type === 'show' ? 'tv' : 'movie';
+            links.push(`<a href="${overseerrUrl}/${seerrType}/${entry.tmdb_id}" target="_blank" class="bg-zinc-800 hover:bg-zinc-700 rounded-md px-3 py-1 text-sm text-zinc-300 no-underline transition-colors">Seerr</a>`);
+        }
+        // TMDB
+        if (entry.tmdb_id) {
+            const tmdbType = entry.media_type === 'show' ? 'tv' : 'movie';
+            links.push(`<a href="https://www.themoviedb.org/${tmdbType}/${entry.tmdb_id}" target="_blank" class="bg-zinc-800 hover:bg-zinc-700 rounded-md px-3 py-1 text-sm text-zinc-300 no-underline transition-colors">TMDB</a>`);
+        }
+        // IMDb
+        if (entry.imdb_id) {
+            links.push(`<a href="https://www.imdb.com/title/${entry.imdb_id}" target="_blank" class="bg-zinc-800 hover:bg-zinc-700 rounded-md px-3 py-1 text-sm text-zinc-300 no-underline transition-colors">IMDb</a>`);
+        }
+        // TVDB
+        if (entry.tvdb_id) {
+            const tvdbType = entry.media_type === 'show' ? 'series' : 'movies';
+            links.push(`<a href="https://thetvdb.com/${tvdbType}/${entry.tvdb_id}" target="_blank" class="bg-zinc-800 hover:bg-zinc-700 rounded-md px-3 py-1 text-sm text-zinc-300 no-underline transition-colors">TVDB</a>`);
+        }
+        // Rotten Tomatoes (search link via IMDB ID if available)
+        if (entry.imdb_id) {
+            links.push(`<a href="https://www.rottentomatoes.com/search?search=${encodeURIComponent(entry.title || '')}" target="_blank" class="bg-zinc-800 hover:bg-zinc-700 rounded-md px-3 py-1 text-sm text-zinc-300 no-underline transition-colors">Rotten Tomatoes</a>`);
+        }
+
+        if (links.length > 0) {
+            html += `<div class="flex gap-2 flex-wrap mb-6">${links.join('')}</div>`;
+        }
+
+        // Ratings badges (populated async after live evaluation)
+        html += '<div id="ratings-badges" class="mb-6"></div>';
+
+        // Rule Evaluation - grouped by collection
+        const RULE_LABELS = {
+            // Criteria
+            never_watched: 'Never watched',
+            not_watched_recently: 'Not watched recently',
+            show_ended: 'Show ended / cancelled',
+            old_content: 'Added long ago',
+            old_season: 'Older season',
+            watch_ratio_low: 'Left unfinished',
+            low_rating: 'Low rating',
+            file_size_min: 'Large file',
+            release_year_before: 'Old release year',
+            // Protections
+            no_keep_tag: 'Protected by tag',
+            no_active_request: 'Unwatched Seerr request',
+            no_protected_request: 'Protected user activity',
+            not_in_keep_collection: 'In keep collection',
+            highly_rated: 'Highly rated',
+            recently_added: 'Recently added',
+            partially_watched: 'Partially watched',
+            on_watchlist: 'On a Seerr watchlist',
+            plex_favorited: 'Favorited in Plex',
+            series_protection: 'Parent show protected',
+            // Informational / legacy
+            debrid_cached: 'Debrid cache status',
+            request_fulfilled: 'Request fulfilled',
+            available_on_debrid: 'Available on debrid',
+        };
+
+        const ACTION_LABELS_RULE = { none: 'No action', delete: 'Delete', unmonitor: 'Unmonitor' };
+
+        // Placeholder for live evaluation (filled in below)
+        html += '<h3 class="text-lg font-semibold text-zinc-100 mt-10 mb-3 pb-2 border-b border-zinc-800">Rules Affecting This Item</h3>';
+        html += '<div id="rules-section"><p class="text-zinc-400 animate-pulse">Evaluating rules live...</p></div>';
+
+        // Per-rule block heading uses "Rule:" terminology in the summary line.
+
+        // Show stored results as fallback while live loads
+        const storedRules = data.rules || [];
+
+        async function renderRules(evaluations, source) {
+            const container = document.getElementById('rules-section');
+            if (!container) return;
+
+            // Pull each matched rule's config so the Check column can name
+            // the actual protected-collection (and media server) being tested
+            // instead of a vague "In keep collection".
+            const ruleConfigs = {};
+            await Promise.all(evaluations.map(async ev => {
+                const slug = (ev.collection || '').toLowerCase().replace(/ /g, '-');
+                if (!slug) return;
+                try {
+                    const resp = await fetch(`/api/collections/${slug}/config`);
+                    if (resp.ok) {
+                        const cfg = await resp.json();
+                        let criteria = cfg.criteria || {};
+                        if (typeof criteria === 'string') {
+                            try { criteria = JSON.parse(criteria); } catch (_) { criteria = {}; }
+                        }
+                        ruleConfigs[ev.collection] = {
+                            protected_collections: criteria.protected_collections || [],
+                            library_source: criteria.library_source || 'plex',
+                        };
+                    }
+                } catch (_) {}
+            }));
+
+            function checkLabelFor(ruleName, ev) {
+                if (ruleName === 'not_in_keep_collection') {
+                    const c = ruleConfigs[ev.collection] || {};
+                    const cols = c.protected_collections || [];
+                    const srv = c.library_source === 'jellyfin' ? 'Jellyfin' : 'Plex';
+                    if (cols.length === 0) return 'In a keep collection';
+                    if (cols.length === 1) return `In ${srv} collection "${cols[0]}"`;
+                    return `In any ${srv} protected collection (${cols.length})`;
+                }
+                return RULE_LABELS[ruleName] || ruleName;
+            }
+
+            const sourceLabel = source === 'live'
+                ? '<span class="text-xs text-zinc-500">Live evaluation (real-time)</span>'
+                : '<span class="text-xs text-zinc-500">Last scan results</span>';
+
+            let rhtml = sourceLabel;
+
+            if (evaluations.length === 0) {
+                rhtml += '<p class="text-sm text-zinc-500">No matching rules found for this item type.</p>';
+                container.innerHTML = rhtml;
+                return;
+            }
+
+            // Overall summary
+            const totalBlocked = evaluations.reduce((n, ev) => n + ev.rules.filter(r => !r.passed).length, 0);
+            const colCount = evaluations.length;
+            if (totalBlocked === 0) {
+                rhtml += '<p class="text-rose-500 font-medium">All checks passed across ' + colCount + ' rule' + (colCount > 1 ? 's' : '') + ' - this item is <strong>eligible for removal</strong> after the grace period.</p>';
+            } else {
+                rhtml += '<p class="text-emerald-500 font-medium">Protected by ' + totalBlocked + ' check' + (totalBlocked > 1 ? 's' : '') + ' across ' + colCount + ' rule' + (colCount > 1 ? 's' : '') + '.</p>';
+            }
+
+            for (const ev of evaluations) {
+                const colName = ev.collection;
+                const colSlug = colName.toLowerCase().replace(/ /g, '-');
+                const colBlocked = ev.rules.filter(r => !r.passed);
+                const colBadge = colBlocked.length === 0
+                    ? '<span class="inline-flex px-2 py-0.5 rounded-md text-xs font-semibold bg-rose-500/15 text-rose-500 ml-2">Eligible</span>'
+                    : '<span class="inline-flex px-2 py-0.5 rounded-md text-xs font-semibold bg-emerald-500/15 text-emerald-500 ml-2">Protected</span>';
+
+                const actionLabel = ACTION_LABELS_RULE[ev.action] || ev.action || 'none';
+                const graceLabel = ev.grace_days ? ev.grace_days + 'd grace' : '';
+                const metaLine = [actionLabel, graceLabel].filter(Boolean).join(' \u00b7 ');
+
+                rhtml += `<details open class="mb-4">
+                    <summary class="cursor-pointer font-semibold text-base text-zinc-100">
+                        <a href="/rules/${colSlug}" class="text-sky-500 hover:text-sky-400 no-underline">${colName}</a>
+                        ${colBadge}
+                        <span class="ml-3 font-normal text-sm text-zinc-500">${metaLine}</span>
+                    </summary>
+                    <table class="w-full text-sm mt-2">
+                        <thead><tr class="border-b border-zinc-800"><th class="text-left py-2 px-3 text-zinc-400 font-medium">Check</th><th class="text-left py-2 px-3 text-zinc-400 font-medium w-28">Status</th><th class="text-left py-2 px-3 text-zinc-400 font-medium">Explanation</th></tr></thead>
+                        <tbody class="divide-y divide-zinc-800">`;
+                for (const r of ev.rules) {
+                    const label = checkLabelFor(r.rule_name, ev);
+                    const status = r.passed
+                        ? '<span class="text-rose-500 whitespace-nowrap">Eligible</span>'
+                        : '<span class="text-emerald-500 whitespace-nowrap">Protected</span>';
+                    rhtml += `<tr>
+                        <td class="py-2 px-3 text-zinc-100 font-medium">${label}</td>
+                        <td class="py-2 px-3">${status}</td>
+                        <td class="py-2 px-3 text-zinc-400">${r.detail || ''}</td>
+                    </tr>`;
+                }
+                rhtml += '</tbody></table></details>';
+            }
+
+            container.innerHTML = rhtml;
+        }
+
+        // Render ratings badges
+        function renderRatingsBadges(ratings) {
+            const container = document.getElementById('ratings-badges');
+            if (!container || !ratings) return;
+            const badges = [];
+            function ratingClasses(val, greenThreshold, yellowThreshold) {
+                if (val >= greenThreshold) return { bg: 'bg-emerald-500/15', text: 'text-emerald-500', border: 'border-emerald-500/40' };
+                if (val >= yellowThreshold) return { bg: 'bg-amber-500/15', text: 'text-amber-500', border: 'border-amber-500/40' };
+                return { bg: 'bg-rose-500/15', text: 'text-rose-500', border: 'border-rose-500/40' };
+            }
+            if (ratings.audience_rating != null) {
+                const c = ratingClasses(ratings.audience_rating, 7, 5);
+                badges.push(`<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-sm font-medium ${c.bg} ${c.text} border ${c.border}">&#9733; ${ratings.audience_rating.toFixed(1)}/10</span>`);
+            }
+            if (ratings.critic_rating != null) {
+                const c = ratingClasses(ratings.critic_rating, 70, 50);
+                badges.push(`<span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-sm font-medium ${c.bg} ${c.text} border ${c.border}">&#127813; ${ratings.critic_rating}%</span>`);
+            }
+            if (badges.length > 0) {
+                container.innerHTML = '<div class="flex gap-2 flex-wrap">' + badges.join('') + '</div>';
+            }
+        }
+
+        // Render ratings from get_item response (immediate, before live eval)
+        if (data.ratings) {
+            renderRatingsBadges(data.ratings);
+        }
+
+        // Kick off live evaluation
+        fetch(`/api/items/${ratingKey}/evaluate`)
+            .then(r => r.json())
+            .then(liveData => {
+                if (liveData.error) {
+                    // Fall back to stored rules
+                    if (storedRules.length > 0) {
+                        const grouped = {};
+                        for (const r of storedRules) {
+                            const col = r.collection || 'Unknown';
+                            if (!grouped[col]) grouped[col] = { collection: col, action: 'none', grace_days: 30, rules: [] };
+                            grouped[col].rules.push(r);
+                        }
+                        renderRules(Object.values(grouped), 'stored');
+                    } else {
+                        document.getElementById('rules-section').innerHTML =
+                            '<p class="text-sm text-zinc-500">Live evaluation failed: ' + liveData.error + '. No stored results available.</p>';
+                    }
+                    return;
+                }
+                // Update ratings from live evaluation if available
+                if (liveData.ratings) {
+                    renderRatingsBadges(liveData.ratings);
+                }
+                if (liveData.evaluations && liveData.evaluations.length > 0) {
+                    renderRules(liveData.evaluations, 'live');
+                } else if (storedRules.length > 0) {
+                    const grouped = {};
+                    for (const r of storedRules) {
+                        const col = r.collection || 'Unknown';
+                        if (!grouped[col]) grouped[col] = { collection: col, action: 'none', grace_days: 30, rules: [] };
+                        grouped[col].rules.push(r);
+                    }
+                    renderRules(Object.values(grouped), 'stored');
+                } else {
+                    document.getElementById('rules-section').innerHTML =
+                        '<p class="text-sm text-zinc-500">No matching rules for this item type.</p>';
+                }
+            })
+            .catch(() => {
+                // Network error - fall back to stored
+                if (storedRules.length > 0) {
+                    const grouped = {};
+                    for (const r of storedRules) {
+                        const col = r.collection || 'Unknown';
+                        if (!grouped[col]) grouped[col] = { collection: col, action: 'none', grace_days: 30, rules: [] };
+                        grouped[col].rules.push(r);
+                    }
+                    renderRules(Object.values(grouped), 'stored');
+                } else {
+                    document.getElementById('rules-section').innerHTML =
+                        '<p class="text-sm text-zinc-500">No rules evaluated yet. Run a scan to populate.</p>';
+                }
+            });
+
+        // Seerr Request History (fetched independently via dedicated endpoint)
+        html += '<h3 class="text-lg font-semibold text-zinc-100 mt-10 mb-3 pb-2 border-b border-zinc-800">Seerr Requests</h3>';
+        html += '<div id="seerr-request-section"><p class="text-zinc-400 animate-pulse">Loading Seerr requests...</p></div>';
+
+        fetch(`/api/items/${ratingKey}/seerr-requests`)
+            .then(r => r.json())
+            .then(seerr => {
+                const section = document.getElementById('seerr-request-section');
+                if (!section) return;
+
+                if (seerr.error && (!seerr.requests || seerr.requests.length === 0)) {
+                    section.innerHTML = `<p class="text-zinc-500">${seerr.error}</p>`;
+                    return;
+                }
+
+                const hasRequests = seerr.requests && seerr.requests.length > 0;
+                const hasTagRequesters = seerr.tag_requesters && seerr.tag_requesters.length > 0;
+
+                if (!hasRequests && !hasTagRequesters) {
+                    section.innerHTML = '<p class="text-zinc-500">No Seerr requests found for this item (TMDB ID: ' + (seerr.tmdb_id || 'unknown') + ').</p>';
+                    return;
+                }
+
+                let shtml = '';
+
+                // Seerr API requests
+                if (hasRequests) {
+                    const STATUS_CLASSES = {
+                        1: 'text-zinc-400',      // Pending
+                        2: 'text-indigo-400',     // Approved
+                        3: 'text-rose-500',       // Declined
+                        4: 'text-indigo-400',     // Processing
+                        5: 'text-emerald-500',    // Available
+                    };
+
+                    shtml += `<table class="w-full text-sm">
+                        <thead><tr class="border-b border-zinc-800"><th class="text-left py-2 px-3 text-zinc-400 font-medium">Requester</th><th class="text-left py-2 px-3 text-zinc-400 font-medium">Status</th><th class="text-left py-2 px-3 text-zinc-400 font-medium">Requested</th><th class="text-left py-2 px-3 text-zinc-400 font-medium">Updated</th></tr></thead>
+                        <tbody class="divide-y divide-zinc-800">`;
+                    for (const req of seerr.requests) {
+                        const cls = STATUS_CLASSES[req.status] || 'text-zinc-400';
+                        const avatar = req.requester_avatar
+                            ? `<img src="${req.requester_avatar}" class="w-5 h-5 rounded-full object-cover align-middle inline-block" alt="">`
+                            : '';
+                        shtml += `<tr>
+                            <td class="py-2 px-3 text-zinc-100">${avatar} ${req.requester || 'Unknown'}</td>
+                            <td class="py-2 px-3"><span class="${cls} font-medium">${req.status_label}</span></td>
+                            <td class="py-2 px-3 text-zinc-300">${fmtDateTimeUTC(req.requested_at)}</td>
+                            <td class="py-2 px-3 text-zinc-300">${fmtDateTimeUTC(req.updated_at)}</td>
+                        </tr>`;
+                    }
+                    shtml += '</tbody></table>';
+                }
+
+                // Tag-based requesters (Seerr left a tag in Radarr/Sonarr but no longer has the request record)
+                if (hasTagRequesters) {
+                    if (hasRequests) {
+                        shtml += '<span class="text-xs text-zinc-500 block mt-3">Also detected from Radarr/Sonarr tags:</span>';
+                    }
+                    shtml += `<table class="w-full text-sm">
+                        <thead><tr class="border-b border-zinc-800"><th class="text-left py-2 px-3 text-zinc-400 font-medium">Requester</th><th class="text-left py-2 px-3 text-zinc-400 font-medium">Source</th></tr></thead>
+                        <tbody class="divide-y divide-zinc-800">`;
+                    for (const user of seerr.tag_requesters) {
+                        shtml += `<tr>
+                            <td class="py-2 px-3 text-zinc-100 font-medium">${user}</td>
+                            <td class="py-2 px-3 text-zinc-500">Detected from Radarr/Sonarr tag</td>
+                        </tr>`;
+                    }
+                    shtml += '</tbody></table>';
+                    if (!hasRequests) {
+                        shtml += '<span class="text-xs text-zinc-500 block mt-2">Seerr has no record of this request, but the Radarr/Sonarr tag indicates it was originally requested through Seerr.</span>';
+                    }
+                }
+
+                if (seerr.tmdb_id) {
+                    shtml += `<span class="text-xs text-zinc-500 block mt-2">Looked up via TMDB ID: ${seerr.tmdb_id}</span>`;
+                }
+                section.innerHTML = shtml;
+            })
+            .catch(() => {
+                const section = document.getElementById('seerr-request-section');
+                if (section) section.innerHTML = '<p class="text-zinc-500">Failed to fetch Seerr requests.</p>';
+            });
+
+        // Watch History - just the table, no summary cards
+        html += '<h3 class="text-lg font-semibold text-zinc-100 mt-10 mb-3 pb-2 border-b border-zinc-800">Watch History</h3>';
+        if (data.watchers && data.watchers.length > 0) {
+            const isShow = data.watch_history.some(h => h.season_number || h.episode_number);
+            const allHistory = data.watch_history || [];
+
+            function avatarHtml(h) {
+                return h.thumb
+                    ? `<img src="${h.thumb}" class="w-5 h-5 rounded-full object-cover align-middle inline-block" alt="">`
+                    : `<span class="w-5 h-5 rounded-full bg-zinc-700 inline-flex items-center justify-center text-[0.6rem] align-middle text-zinc-300">${(h.username||'?')[0].toUpperCase()}</span>`;
+            }
+            function epInfo(h) {
+                if (!isShow) return '';
+                const s = h.season_number != null ? String(h.season_number).padStart(2,'0') : '??';
+                const e = h.episode_number != null ? String(h.episode_number).padStart(2,'0') : '??';
+                const epTitle = h.title && h.grandparent_title && h.title !== h.grandparent_title
+                    ? h.title.replace(h.grandparent_title, '').replace(/^\s*[-:]\s*/, '') : (h.title || '');
+                return `S${s}E${e}${epTitle ? ' - ' + epTitle : ''}`;
+            }
+
+            // Group by user - show most recent play, expandable for full history
+            html += `<table class="w-full text-sm">
+                <thead><tr class="border-b border-zinc-800"><th class="text-left py-2 px-3 text-zinc-400 font-medium">User</th><th class="text-left py-2 px-3 text-zinc-400 font-medium">Plays</th>${isShow ? '<th class="text-left py-2 px-3 text-zinc-400 font-medium">Most Recent</th>' : ''}<th class="text-left py-2 px-3 text-zinc-400 font-medium">Last Watched</th></tr></thead>
+                <tbody class="divide-y divide-zinc-800">`;
+            for (const w of data.watchers) {
+                const userHistory = allHistory.filter(h => h.username === w.username);
+                const latest = userHistory[0];
+                const hasMore = userHistory.length > 1;
+                const rowId = 'wh-' + w.username.replace(/[^a-zA-Z0-9]/g, '_');
+
+                html += `<tr class="${hasMore ? 'cursor-pointer hover:bg-zinc-800/50' : ''}" ${hasMore ? 'onclick="toggleWatchDetail(\'' + rowId + '\')"' : ''}>
+                    <td class="py-2 px-3 text-zinc-100">${avatarHtml(w)} ${w.username}${hasMore ? ' <span class="text-zinc-600 text-xs">&#9656;</span>' : ''}</td>
+                    <td class="py-2 px-3 text-zinc-300">${w.play_count}</td>
+                    ${isShow && latest ? '<td class="py-2 px-3 text-zinc-300">' + epInfo(latest) + '</td>' : ''}
+                    <td class="py-2 px-3 text-zinc-300">${fmtDate(w.last_watched)}</td>
+                </tr>`;
+
+                if (hasMore) {
+                    html += `<tr id="${rowId}" class="hidden"><td colspan="${isShow ? 4 : 3}" class="py-1 px-3 pl-8 pb-3">
+                        <table class="w-full text-xs">
+                        <thead><tr class="border-b border-zinc-800">${isShow ? '<th class="text-left py-1.5 px-2 text-zinc-500 font-medium">Episode</th>' : ''}<th class="text-left py-1.5 px-2 text-zinc-500 font-medium">Watched</th></tr></thead><tbody class="divide-y divide-zinc-800/50">`;
+                    for (const h of userHistory) {
+                        html += `<tr>${isShow ? '<td class="py-1.5 px-2 text-zinc-300">' + epInfo(h) + '</td>' : ''}<td class="py-1.5 px-2 text-zinc-400">${fmtDateTime(h.watched_at)}</td></tr>`;
+                    }
+                    html += '</tbody></table></td></tr>';
+                }
+            }
+            html += '</tbody></table>';
+
+            // toggleWatchDetail defined below at script scope
+        } else {
+            html += '<p class="text-zinc-500">No one has watched this item yet.</p>';
+        }
+
+        // Debrid cache
+        if (data.debrid_cache && data.debrid_cache.length > 0) {
+            html += '<h3 class="text-lg font-semibold text-zinc-100 mt-10 mb-3 pb-2 border-b border-zinc-800">Debrid Cache</h3>';
+            html += `<table class="w-full text-sm"><thead><tr class="border-b border-zinc-800"><th class="text-left py-2 px-3 text-zinc-400 font-medium">Provider</th><th class="text-left py-2 px-3 text-zinc-400 font-medium">Cached</th><th class="text-left py-2 px-3 text-zinc-400 font-medium">Checked</th></tr></thead><tbody class="divide-y divide-zinc-800">`;
+            for (const d of data.debrid_cache) {
+                const cached = d.is_cached
+                    ? '<span class="text-emerald-500 font-medium">Yes</span>'
+                    : '<span class="text-rose-500 font-medium">No</span>';
+                html += `<tr><td class="py-2 px-3 text-zinc-100">${d.provider}</td><td class="py-2 px-3">${cached}</td><td class="py-2 px-3 text-zinc-300">${fmtDateTimeUTC(d.checked_at)}</td></tr>`;
+            }
+            html += '</tbody></table>';
+        }
+
+        // Activity
+        const ACT_LABELS = {
+            item_added: 'Added to rule',
+            item_override: 'Override changed',
+            item_deleted: 'Deleted',
+            item_actioned: 'Action taken',
+            run_started: 'Scan started',
+            run_completed: 'Scan completed',
+        };
+        if (data.activity && data.activity.length > 0) {
+            html += '<h3 class="text-lg font-semibold text-zinc-100 mt-10 mb-3 pb-2 border-b border-zinc-800">Activity</h3>';
+            html += `<table class="w-full text-sm"><thead><tr class="border-b border-zinc-800"><th class="text-left py-2 px-3 text-zinc-400 font-medium">Time</th><th class="text-left py-2 px-3 text-zinc-400 font-medium">Event</th><th class="text-left py-2 px-3 text-zinc-400 font-medium">Detail</th></tr></thead><tbody class="divide-y divide-zinc-800">`;
+            for (const a of data.activity) {
+                const evtLabel = ACT_LABELS[a.event_type] || a.event_type;
+                let detail = '';
+                if (a.detail) {
+                    try {
+                        const d = typeof a.detail === 'string' ? JSON.parse(a.detail) : a.detail;
+                        if (typeof d === 'object') {
+                            const parts = [];
+                            if (d.dry_run) parts.push('Dry run');
+                            if (d.duration) parts.push(Math.round(d.duration) + 's');
+                            detail = parts.join(' \u00b7 ');
+                        } else { detail = String(d); }
+                    } catch(e) { detail = String(a.detail); }
+                }
+                html += `<tr><td class="py-2 px-3 text-zinc-300">${fmtDateTimeUTC(a.timestamp)}</td><td class="py-2 px-3 text-zinc-100">${evtLabel}</td><td class="py-2 px-3 text-zinc-400">${detail}</td></tr>`;
+            }
+            html += '</tbody></table>';
+        }
+
+        // Actions
+        html += `<h3 class="text-lg font-semibold text-zinc-100 mt-10 mb-3 pb-2 border-b border-zinc-800">Actions</h3>
+        <div class="flex gap-3 flex-wrap mb-4">
+            <button class="px-4 py-2 rounded-md border border-zinc-600 text-zinc-300 hover:bg-zinc-800 transition-colors text-sm font-medium"
+                    title="This item will be protected from all rule actions until you clear the override."
+                    onclick="doAction('keep', this)">Keep Forever</button>
+            <button class="px-4 py-2 rounded-md border border-rose-600 text-rose-500 hover:bg-rose-600/10 transition-colors text-sm font-medium"
+                    title="Permanently remove this item. Cannot be undone."
+                    onclick="confirmDelete(this)">Delete</button>
+            <button class="px-4 py-2 rounded-md bg-zinc-800 text-zinc-400 hover:bg-zinc-700 transition-colors text-sm font-medium"
+                    title="Remove the manual override so the item follows the normal rule lifecycle again."
+                    onclick="doAction('clear', this)">Clear Override</button>
+        </div>
+        <div id="action-result"></div>`;
+
+        target.innerHTML = html;
+    })
+    .catch(err => {
+        document.getElementById('item-data').innerHTML = `<p class="text-rose-500">Error loading item: ${err.message}</p>`;
+    });
+} // end if (ratingKey)
+
+// --- Delete confirmation via dialog ---
+let pendingDeleteBtn = null;
+
+function toggleWatchDetail(id) {
+    const r = document.getElementById(id);
+    if (r) r.classList.toggle('hidden');
+}
+
+function confirmDelete(btn) {
+    pendingDeleteBtn = btn;
+    document.getElementById('delete-dialog').showModal();
+}
+
+document.getElementById('confirm-delete-btn').addEventListener('click', () => {
+    document.getElementById('delete-dialog').close();
+    if (pendingDeleteBtn) doAction('delete', pendingDeleteBtn);
+});
+
+function clearOverrideInline(btn) {
+    if (!btn) return;
+    btn.disabled = true;
+    btn.textContent = 'Clearing...';
+    fetch(`/api/items/${ratingKey}/action`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({action: 'clear'})
+    })
+    .then(r => r.json())
+    .then(d => {
+        if (d.status === 'ok') {
+            showToast('Override cleared', 'success');
+            // Remove the override pill from the header
+            const pill = btn.closest('span.inline-flex');
+            if (pill) pill.remove();
+        } else {
+            showToast('Clear failed: ' + (d.detail || 'unknown'), 'error');
+            btn.disabled = false;
+            btn.textContent = 'Clear override';
+        }
+    })
+    .catch(err => {
+        showToast('Clear failed: ' + err.message, 'error');
+        btn.disabled = false;
+        btn.textContent = 'Clear override';
+    });
+}
+
+function doAction(action, btn) {
+    const result = document.getElementById('action-result');
+    const allBtns = btn.parentElement.querySelectorAll('button');
+
+    allBtns.forEach(b => { b.disabled = true; b.classList.add('opacity-50'); });
+    btn.textContent = btn.textContent + '...';
+    result.innerHTML = '';
+
+    fetch(`/api/items/${ratingKey}/action`, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({action: action})
+    })
+    .then(r => r.json())
+    .then(data => {
+        allBtns.forEach(b => { b.disabled = false; b.classList.remove('opacity-50'); });
+        // Restore button text (remove trailing "...")
+        btn.textContent = btn.textContent.replace(/\.\.\.$/, '');
+
+        if (data.status === 'ok') {
+            const label = data.override || 'cleared';
+            result.innerHTML = `<p class="text-emerald-500 text-sm font-medium">Override set to: <strong>${label}</strong></p>`;
+            showToast('Override updated: ' + label, 'success');
+        } else {
+            result.innerHTML = `<p class="text-rose-500 text-sm font-medium">Error: ${data.detail || 'Unknown error'}</p>`;
+            showToast('Action failed: ' + (data.detail || 'unknown'), 'error');
+        }
+    })
+    .catch(err => {
+        allBtns.forEach(b => { b.disabled = false; b.classList.remove('opacity-50'); });
+        btn.textContent = btn.textContent.replace(/\.\.\.$/, '');
+        result.innerHTML = `<p class="text-rose-500 text-sm font-medium">Request failed: ${err.message}</p>`;
+        showToast('Request failed: ' + err.message, 'error');
+    });
+}
+
+// --- Item search ---
+const searchInput = document.getElementById('item-search');
+const searchResults = document.getElementById('search-results');
+const searchList = document.getElementById('search-results-list');
+let searchTimeout = null;
+
+searchInput.addEventListener('input', function() {
+    clearTimeout(searchTimeout);
+    const q = this.value.trim();
+    if (q.length < 2) { searchResults.classList.add('hidden'); return; }
+    searchTimeout = setTimeout(() => {
+        fetch('/api/items/search?q=' + encodeURIComponent(q))
+            .then(r => r.json())
+            .then(data => {
+                if (!data.results || data.results.length === 0) {
+                    searchList.innerHTML = '<div class="px-3 py-3 text-zinc-500">No items found</div>';
+                } else {
+                    searchList.innerHTML = data.results.map(item => {
+                        const meta = [item.media_type || ''];
+                        if (item.collection) meta.push(item.collection);
+                        else if (item.source === 'plex') meta.push('Plex library');
+                        const poster = `<img src="/api/items/${item.rating_key}/poster?size=sm" loading="lazy" decoding="async" alt="" class="shrink-0 rounded w-[30px] h-[45px] object-cover bg-zinc-800" onerror="this.style.visibility='hidden'">`;
+                        return `<a href="/items/${item.rating_key}" class="flex items-center gap-3 px-3 py-2 no-underline border-b border-zinc-800 hover:bg-zinc-800 transition-colors">
+                            ${poster}
+                            <span class="flex-1 min-w-0 truncate">
+                                <span class="font-semibold text-zinc-100">${item.title || item.rating_key}</span>
+                                <span class="text-xs text-zinc-500 ml-2">${meta.join(' \u00b7 ')}</span>
+                            </span>
+                        </a>`;
+                    }).join('');
+                }
+                searchResults.classList.remove('hidden');
+            });
+    }, 300);
+});
+
+// Hide search results when clicking outside
+document.addEventListener('click', (e) => {
+    if (!e.target.closest('#item-search') && !e.target.closest('#search-results')) {
+        searchResults.classList.add('hidden');
+    }
+});
+
+// Pre-fill search if navigating to bare /items/ page (no rating_key)
+if (!ratingKey) {
+    searchInput.focus();
+}
+</script>
+{% endblock %}

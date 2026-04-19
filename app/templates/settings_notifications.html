@@ -1,0 +1,147 @@
+{% extends "base.html" %}
+{% block title %}Settings - Notifications{% endblock %}
+{% block content %}
+<style>
+    @keyframes toast-in {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes toast-out {
+        from { opacity: 1; transform: translateY(0); }
+        to { opacity: 0; transform: translateY(10px); }
+    }
+</style>
+
+<div class="mb-6">
+    <h2 class="text-2xl font-bold text-zinc-100">Notifications</h2>
+    <p class="text-sm text-zinc-400 mt-1">Notification service connections</p>
+</div>
+
+<form id="settings-form">
+
+<!-- Apprise -->
+<div class="bg-zinc-900 rounded-lg p-6 border border-zinc-800 mb-6">
+    <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold text-zinc-100">Apprise</h3>
+        <span class="text-sm font-normal text-zinc-400" id="status-apprise"></span>
+    </div>
+    <div class="mb-4">
+        <label class="block text-sm font-medium text-zinc-300 mb-1">URL</label>
+        <input type="text" name="apprise_url" placeholder="http://apprise-api:8000/notify/media"
+               class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+        <p class="text-xs text-zinc-500 mt-1">Full Apprise API notification endpoint, including the <code class="text-xs bg-zinc-800 px-1 py-0.5 rounded">/notify/tag</code> path. MCM sends a summary notification here after each run completes, so you know what was processed and what actions were taken.</p>
+    </div>
+    <button type="button" onclick="testConnection('apprise')"
+            class="rounded-md px-3 py-1.5 text-sm font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent">Test Connection</button>
+</div>
+
+<!-- Sticky save bar -->
+<div class="sticky bottom-0 bg-zinc-950 py-4 border-t border-zinc-800 mt-6 flex justify-end gap-3">
+    <button type="submit" id="save-btn"
+            class="rounded-md px-3 py-1.5 text-sm font-medium bg-indigo-500 hover:bg-indigo-400 text-white">Save Settings</button>
+</div>
+
+</form>
+
+<!-- Toast container -->
+<div class="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2" id="toast-container"></div>
+
+<script>
+(function() {
+    function toast(msg, type) {
+        const container = document.getElementById('toast-container');
+        const el = document.createElement('div');
+        const bg = type === 'success' ? 'bg-emerald-600' : 'bg-rose-600';
+        el.className = `${bg} text-white text-sm font-medium px-5 py-3 rounded-md shadow-lg max-w-sm`;
+        el.style.animation = 'toast-in 0.25s ease-out';
+        el.textContent = msg;
+        container.appendChild(el);
+        setTimeout(() => {
+            el.style.animation = 'toast-out 0.25s ease-in forwards';
+            setTimeout(() => el.remove(), 250);
+        }, 3000);
+    }
+
+    function populateForm(settings) {
+        for (const [key, val] of Object.entries(settings)) {
+            const el = document.querySelector(`[name="${key}"]`);
+            if (!el) continue;
+            el.value = val ?? '';
+        }
+    }
+
+    document.getElementById('settings-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const formData = new FormData(e.target);
+        const updates = {};
+
+        const allKeys = ['apprise_url'];
+
+        for (const key of allKeys) {
+            updates[key] = formData.get(key) ?? '';
+        }
+
+        const btn = document.getElementById('save-btn');
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+        btn.classList.add('opacity-50', 'cursor-not-allowed');
+
+        fetch('/api/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ settings: updates }),
+        })
+        .then(r => {
+            if (!r.ok) throw new Error('Server returned ' + r.status);
+            return r.json();
+        })
+        .then(data => {
+            const count = (data.updated || []).length;
+            toast('Settings saved (' + count + ' fields updated)', 'success');
+        })
+        .catch(err => toast('Failed to save: ' + err.message, 'error'))
+        .finally(() => {
+            btn.disabled = false;
+            btn.textContent = 'Save Settings';
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        });
+    });
+
+    window.testConnection = function(service) {
+        const statusEl = document.getElementById('status-' + service);
+        statusEl.innerHTML = '<span class="text-zinc-400">Testing...</span>';
+
+        const payload = { service };
+        const urlInput = document.querySelector(`[name="${service}_url"]`);
+
+        if (urlInput && urlInput.value) payload.url = urlInput.value;
+
+        fetch('/api/settings/test-connection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) {
+                statusEl.innerHTML = '<span class="text-emerald-400">' + (data.detail || 'Connected') + '</span>';
+            } else {
+                statusEl.innerHTML = '<span class="text-rose-400">Failed: ' + (data.error || 'Unknown') + '</span>';
+            }
+        })
+        .catch(() => {
+            statusEl.innerHTML = '<span class="text-rose-400">Request failed</span>';
+        });
+    };
+
+    fetch('/api/settings')
+        .then(r => {
+            if (!r.ok) throw new Error('Server returned ' + r.status);
+            return r.json();
+        })
+        .then(settings => populateForm(settings))
+        .catch(err => toast('Failed to load settings: ' + err.message, 'error'));
+})();
+</script>
+{% endblock %}
