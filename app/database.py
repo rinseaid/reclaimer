@@ -9,13 +9,6 @@ from pathlib import Path
 log = logging.getLogger(__name__)
 
 DB_PATH = Path("/app/data/reclaimer.db")
-# Historical filenames from prior renames. Checked in order on boot;
-# the first match is renamed to DB_PATH. After a single successful
-# boot the legacy files are gone and this list never fires again.
-_LEGACY_DB_PATHS = (
-    Path("/app/data/jettison.db"),
-    Path("/app/data/mcm.db"),
-)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS settings (
@@ -350,34 +343,8 @@ def _migrate(conn: sqlite3.Connection) -> None:
         )
 
 
-def _migrate_legacy_db_filename() -> None:
-    """Pick up an older DB filename (``jettison.db``, ``mcm.db``) and
-    rename it to ``reclaimer.db`` on first boot after a project rename.
-
-    The WAL sidecar files are not carried over because SQLite recreates
-    them on first open; leaving them behind would point SQLite at a
-    non-existent main file, so we drop them here.
-    """
-    if DB_PATH.exists():
-        return
-    legacy = next((p for p in _LEGACY_DB_PATHS if p.exists()), None)
-    if legacy is None:
-        return
-    DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    legacy.rename(DB_PATH)
-    for suffix in ("-shm", "-wal"):
-        stale = legacy.with_name(legacy.name + suffix)
-        if stale.exists():
-            try:
-                stale.unlink()
-            except OSError:
-                pass
-    log.info("Migration: renamed %s -> %s", legacy, DB_PATH)
-
-
 def init_db() -> None:
     """Create tables if they don't exist and seed defaults."""
-    _migrate_legacy_db_filename()
     conn = get_db()
     # WAL mode is set per-connection in get_db(), but run it at init so the
     # DB file is explicitly in WAL mode on first open. PRAGMA optimize tells
