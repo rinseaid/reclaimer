@@ -113,7 +113,7 @@
       <button type="button" id="import-confirm-btn"
               class="rounded-md px-3 py-1.5 text-sm font-medium bg-indigo-500 hover:bg-indigo-400 text-white">Import</button>
     </div>
-    <div class="mcm-kbd-hint"><span>Press</span> <kbd class="mcm-kbd">Esc</kbd> <span>to close</span></div>
+    <div class="jettison-kbd-hint"><span>Press</span> <kbd class="jettison-kbd">Esc</kbd> <span>to close</span></div>
   </div>
 </dialog>
 
@@ -131,7 +131,7 @@
         <button type="submit" id="create-submit-btn" class="rounded-md px-3 py-1.5 text-sm font-medium bg-indigo-500 hover:bg-indigo-400 text-white">Create</button>
       </div>
     </form>
-    <div class="mcm-kbd-hint"><span>Press</span> <kbd class="mcm-kbd">Esc</kbd> <span>to close</span></div>
+    <div class="jettison-kbd-hint"><span>Press</span> <kbd class="jettison-kbd">Esc</kbd> <span>to close</span></div>
   </div>
 </dialog>
 
@@ -146,7 +146,7 @@
       <button type="button" class="text-zinc-500 hover:text-zinc-200 text-xl leading-none px-2" onclick="document.getElementById('template-dialog').close()" aria-label="Close">&times;</button>
     </div>
     <div id="template-list" class="grid gap-3 md:grid-cols-2 lg:grid-cols-3"></div>
-    <div class="mcm-kbd-hint"><span>Press</span> <kbd class="mcm-kbd">Esc</kbd> <span>to close</span></div>
+    <div class="jettison-kbd-hint"><span>Press</span> <kbd class="jettison-kbd">Esc</kbd> <span>to close</span></div>
   </div>
 </dialog>
 
@@ -159,7 +159,7 @@
       <button type="button" class="rounded-md px-3 py-1.5 text-sm font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent" onclick="document.getElementById('live-run-dialog').close()">Cancel</button>
       <button type="button" id="live-run-confirm-btn" class="rounded-md px-3 py-1.5 text-sm font-medium bg-amber-500 hover:bg-amber-400 text-zinc-900">Start Live Run</button>
     </div>
-    <div class="mcm-kbd-hint"><span>Press</span> <kbd class="mcm-kbd">Esc</kbd> <span>to close</span></div>
+    <div class="jettison-kbd-hint"><span>Press</span> <kbd class="jettison-kbd">Esc</kbd> <span>to close</span></div>
   </div>
 </dialog>
 
@@ -444,12 +444,12 @@ window.showToast = function(message, kind) {
             <svg viewBox="0 0 200 140" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"
                  class="w-44 h-32 mx-auto mb-6">
               <defs>
-                <linearGradient id="mcm-hero-g" x1="0" x2="1" y1="0" y2="1">
+                <linearGradient id="jettison-hero-g" x1="0" x2="1" y1="0" y2="1">
                   <stop offset="0" stop-color="#6366f1" stop-opacity="0.35"/>
                   <stop offset="1" stop-color="#818cf8" stop-opacity="0.08"/>
                 </linearGradient>
               </defs>
-              <rect x="22" y="28" width="140" height="90" rx="4" fill="url(#mcm-hero-g)" stroke="#4f46e5" stroke-width="1.5"/>
+              <rect x="22" y="28" width="140" height="90" rx="4" fill="url(#jettison-hero-g)" stroke="#4f46e5" stroke-width="1.5"/>
               <line x1="22" y1="72" x2="162" y2="72" stroke="#4f46e5" stroke-width="1" opacity="0.5"/>
               <rect x="30"  y="36" width="10" height="32" rx="1" fill="#818cf8"/>
               <rect x="42"  y="40" width="8"  height="28" rx="1" fill="#a5b4fc"/>
@@ -476,9 +476,9 @@ window.showToast = function(message, kind) {
         return `
         <div class="bg-zinc-900 rounded-xl border border-zinc-800 p-8 md:p-12 text-center max-w-2xl mx-auto">
             ${illustrationSvg}
-            <h3 class="text-2xl font-bold text-zinc-100 mb-3">Welcome to Media Collection Manager</h3>
+            <h3 class="text-2xl font-bold text-zinc-100 mb-3">Welcome to Jettison</h3>
             <p class="text-zinc-400 text-sm max-w-lg mx-auto mb-8">
-                MCM finds unwatched content in your libraries and optionally removes it after a grace period, based on rules you define.
+                Jettison finds unwatched content in your libraries and optionally removes it after a grace period, based on rules you define.
             </p>
             <ol class="text-left max-w-md mx-auto space-y-3 mb-8">
                 <li class="flex gap-3 items-start">
@@ -1241,7 +1241,7 @@ window.showToast = function(message, kind) {
     });
 
     // Export: GET /api/collections/export, trigger download as
-    // mcm-rules-YYYY-MM-DD.json.
+    // jettison-rules-YYYY-MM-DD.json.
     const kebabExportBtn = document.getElementById('kebab-export');
     if (kebabExportBtn) {
         kebabExportBtn.addEventListener('click', async () => {
@@ -1258,7 +1258,7 @@ window.showToast = function(message, kind) {
                 const today = new Date().toISOString().slice(0, 10);
                 const a = document.createElement('a');
                 a.href = url;
-                a.download = `mcm-rules-${today}.json`;
+                a.download = `jettison-rules-${today}.json`;
                 document.body.appendChild(a);
                 a.click();
                 a.remove();

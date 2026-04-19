@@ -119,7 +119,7 @@
       <button type="button" class="rounded-md px-3 py-1.5 text-sm font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent" onclick="document.getElementById('live-run-dialog').close()">Cancel</button>
       <button type="button" id="live-run-confirm-btn" class="rounded-md px-3 py-1.5 text-sm font-medium bg-amber-500 hover:bg-amber-400 text-zinc-900">Start Live Run</button>
     </div>
-    <div class="mcm-kbd-hint"><span>Press</span> <kbd class="mcm-kbd">Esc</kbd> <span>to close</span></div>
+    <div class="jettison-kbd-hint"><span>Press</span> <kbd class="jettison-kbd">Esc</kbd> <span>to close</span></div>
   </div>
 </dialog>
 
@@ -371,7 +371,7 @@ const keepMembers = new Set();
 // any change to the toggle button code.
 const watchlistByUser = new Map();
 // Which user the UI currently represents. null = "the user that owns the
-// MCM Seerr API key" (resolved server-side). When the app grows per-user
+// Jettison Seerr API key" (resolved server-side). When the app grows per-user
 // sessions this will be set from the signed-in user; the +Watchlist button
 // reads/writes this user's bucket.
 let currentWatchlistUserId = null;

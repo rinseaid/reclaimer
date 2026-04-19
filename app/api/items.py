@@ -25,7 +25,7 @@ class AddToKeepBody(BaseModel):
 
 class WatchlistBody(BaseModel):
     """Optional target Seerr user id. Omitted / None means "the user that owns
-    the MCM Seerr API key" (admin). Future multi-user work can populate this
+    the Jettison Seerr API key" (admin). Future multi-user work can populate this
     from the authenticated session or a user picker without changing any
     server/DB shapes."""
     user_id: Optional[int] = None
@@ -888,7 +888,7 @@ def _resolve_watchlist_user(requested: Optional[int]):
     - ``requested`` non-None and positive: use as-is. Future auth layer will
       pass the signed-in user's Seerr id here.
     - ``requested`` omitted: fall back to the user that owns the admin API
-      key (today: MCM admin; rinseaid). That preserves single-user
+      key (today: Jettison admin; rinseaid). That preserves single-user
       behaviour without the caller having to know the uid.
 
     Returns (url, key, uid) or raises HTTPException.
@@ -912,7 +912,7 @@ def add_item_to_watchlist(rating_key: str, body: WatchlistBody = WatchlistBody()
     """Add this item's TMDB id to a Seerr user's watchlist.
 
     ``body.user_id`` targets a specific Seerr user. When omitted, defaults
-    to the user that owns the MCM Seerr API key (today the admin). Seasons
+    to the user that owns the Jettison Seerr API key (today the admin). Seasons
     inherit the show's TMDB id, so watchlisting a season effectively
     watchlists the whole show (same behaviour Seerr/Plex themselves exhibit).
     """
