@@ -1,0 +1,480 @@
+{{define "content"}}
+<style>
+    /* CSS Grid table - layout Tailwind utilities can't cleanly express */
+    .gtable { width: 100%; }
+    .gtable-header, .gtable-filter, .gtable-row {
+        display: grid;
+        grid-template-columns: 200px 1.6fr 2fr 120px 80px;
+        gap: 0 0.75rem;
+        padding: 0 4px;
+        align-items: center;
+    }
+
+    /* Responsive: collapse detail + progress on narrow viewports.
+       Below 768px we show just: user+source | title+pill | watched_at */
+    @media (max-width: 768px) {
+        .gtable-header, .gtable-filter, .gtable-row {
+            grid-template-columns: 130px 1fr 90px;
+            gap: 0 0.5rem;
+        }
+        .gtable-header > div:nth-child(3),
+        .gtable-header > div:nth-child(5),
+        .gtable-filter > div:nth-child(3),
+        .gtable-filter > div:nth-child(5),
+        .gtable-row > div:nth-child(3),
+        .gtable-row > div:nth-child(5) { display: none; }
+    }
+</style>
+
+<div class="mb-4">
+    <h2 class="text-2xl font-bold text-zinc-100 mb-1">Watch History</h2>
+    <p id="activity-subtitle" class="text-sm text-zinc-400 mb-0">Loading watch history...</p>
+</div>
+
+<!-- Filter bar -->
+<div class="flex flex-wrap items-end gap-2 mb-4">
+    <div class="flex flex-col gap-1">
+        <label for="filter-user" class="text-xs text-zinc-400">User</label>
+        <select id="filter-user"
+            class="h-9 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+            <option value="">All Users</option>
+        </select>
+    </div>
+    <div class="flex flex-col gap-1 w-72">
+        <label for="filter-search" class="text-xs text-zinc-400">Search</label>
+        <input type="text" id="filter-search" placeholder="Title or show name..."
+            class="h-9 w-full appearance-none rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 text-sm leading-none placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+    </div>
+    <div class="flex flex-col gap-1">
+        <label for="filter-type" class="text-xs text-zinc-400">Type</label>
+        <select id="filter-type"
+            class="h-9 rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+            <option value="">All</option>
+            <option value="movie">Movies</option>
+            <option value="episode">Episodes</option>
+        </select>
+    </div>
+    <button class="ml-auto rounded-md border border-zinc-600 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 bg-transparent px-2 py-1 text-xs inline-flex items-center gap-1.5 transition-all duration-150"
+        id="col-filter-toggle" title="Toggle column filters" onclick="toggleColumnFilters()">
+        <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor"><path d="M1.5 1.5h13L10 7.5V13l-4 2V7.5z"/></svg>
+        Filters
+    </button>
+</div>
+
+<div id="activity-container">
+    <div class="flex items-center gap-2 text-zinc-400 text-sm py-4">
+        <svg class="w-4 h-4 shrink-0 animate-spin text-indigo-400" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="12" cy="12" r="10" stroke="currentColor" stroke-width="3" stroke-opacity="0.2"/><path d="M22 12a10 10 0 0 1-10 10" stroke="currentColor" stroke-width="3" stroke-linecap="round"/></svg>
+        <span>Loading watch history...</span>
+    </div>
+</div>
+<div class="pagination" id="activity-pagination" style="display:none;"></div>
+
+<!-- Server-rendered empty-state templates; cloned by renderActivity() so we
+     don't duplicate the macro markup in JS. -->
+<template id="tpl-empty-default"><div class="text-center py-12 px-4 border-2 border-dashed border-zinc-700 rounded-lg"><p class="text-zinc-500">No watch history recorded yet.</p></div></template>
+<template id="tpl-empty-filtered"><div class="text-center py-12 px-4 border-2 border-dashed border-zinc-700 rounded-lg"><p class="text-zinc-500">No results. Try adjusting your filters.</p></div></template>
+
+<script>
+let perPage = 50;
+let currentPage = 1;
+let currentSort = 'watched';
+let currentSortDir = 'desc';
+let searchDebounce = null;
+let columnFiltersVisible = false;
+let knownTotalUsers = 0;
+let suppressUrlWrite = false;
+
+function parseTS(dateStr) {
+    if (!dateStr) return null;
+    const s = (dateStr.includes('T') ? dateStr : dateStr.replace(' ', 'T'));
+    return new Date(s);
+}
+
+function formatWatchedDate(dateStr) {
+    const d = parseTS(dateStr);
+    if (!d || isNaN(d)) return '--';
+    const now = new Date();
+    const diffMs = now - d;
+    const diffMin = Math.floor(diffMs / 60000);
+
+    let relative;
+    if (diffMin < 1) relative = 'Just now';
+    else if (diffMin < 60) relative = diffMin + 'm ago';
+    else {
+        const diffHr = Math.floor(diffMin / 60);
+        if (diffHr < 24) relative = diffHr + 'h ago';
+        else {
+            const diffDay = Math.floor(diffHr / 24);
+            if (diffDay < 7) relative = diffDay + 'd ago';
+            else relative = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' });
+        }
+    }
+
+    const fullDate = d.toLocaleDateString(undefined, { year: 'numeric', month: 'short', day: 'numeric' })
+        + ' ' + d.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' });
+    return '<span title="' + esc(fullDate) + '">' + relative + '</span>';
+}
+
+function esc(str) {
+    if (str === null || str === undefined) return '';
+    const d = document.createElement('div');
+    d.textContent = String(str);
+    return d.innerHTML;
+}
+
+// Shared badge palette (matches logs.html / collections_list.html).
+const BADGE_BASE = 'inline-flex px-2 py-0.5 rounded-md text-xs font-semibold whitespace-nowrap';
+const BADGE_USER = BADGE_BASE + ' bg-indigo-500/15 text-indigo-300';
+const BADGE_SHOW = BADGE_BASE + ' bg-sky-500/15 text-sky-400';
+const BADGE_MOVIE = BADGE_BASE + ' bg-amber-500/15 text-amber-400';
+const BADGE_PLEX = BADGE_BASE + ' bg-amber-500/15 text-amber-400';
+const BADGE_JELLYFIN = BADGE_BASE + ' bg-emerald-500/15 text-emerald-400';
+
+function userAvatar(item) {
+    if (item.thumb) {
+        return '<img src="' + esc(item.thumb) + '" alt="" loading="lazy" class="w-6 h-6 rounded-full object-cover shrink-0">';
+    }
+    const initials = (item.username || '?').substring(0, 2).toUpperCase();
+    return '<span class="w-6 h-6 rounded-full bg-zinc-700 flex items-center justify-center text-[0.65rem] font-semibold text-zinc-300 shrink-0">' + esc(initials) + '</span>';
+}
+
+function sourceBadge(source) {
+    // A small colored dot is enough to distinguish Plex / Jellyfin rows
+    // without reintroducing a text pill that reads as an obscure acronym.
+    // Tooltip on hover names the server for anyone who needs the reminder.
+    if (source === 'plex+jellyfin') {
+        // Two dots side-by-side when the same human watched via both servers.
+        return '<span title="Plex + Jellyfin" aria-label="Plex and Jellyfin" class="inline-flex items-center gap-0.5 shrink-0">'
+             + '<span class="inline-block w-2 h-2 rounded-full bg-amber-400"></span>'
+             + '<span class="inline-block w-2 h-2 rounded-full bg-emerald-400"></span>'
+             + '</span>';
+    }
+    if (source === 'jellyfin') {
+        return '<span title="Jellyfin" aria-label="Jellyfin" class="inline-block w-2 h-2 rounded-full bg-emerald-400 shrink-0"></span>';
+    }
+    if (source === 'plex') {
+        return '<span title="Plex" aria-label="Plex" class="inline-block w-2 h-2 rounded-full bg-amber-400 shrink-0"></span>';
+    }
+    return '';
+}
+
+function titleCell(a) {
+    const name = (a.media_type === 'episode' && a.grandparent_title)
+        ? a.grandparent_title
+        : (a.title || a.rating_key || '--');
+    const pillClass = a.media_type === 'episode' ? BADGE_SHOW : BADGE_MOVIE;
+    const pillLabel = a.media_type === 'episode' ? 'Show' : 'Movie';
+    const rk = a.grandparent_rating_key || a.rating_key;
+    const poster = rk
+        ? '<img src="/api/items/' + esc(rk) + '/poster?size=sm" loading="lazy" decoding="async" alt="" '
+          + 'class="w-[30px] h-[45px] object-cover rounded-sm bg-zinc-800 shrink-0" '
+          + 'onerror="this.style.visibility=\'hidden\'">'
+        : '<span class="w-[30px] h-[45px] rounded-sm bg-zinc-800 shrink-0 inline-block"></span>';
+    return '<div class="flex items-center gap-2.5 min-w-0">'
+        + poster
+        + '<span class="min-w-0 flex-1 flex items-center gap-2 flex-wrap">'
+        + '<strong class="text-zinc-100 truncate">' + esc(name) + '</strong>'
+        + '<span class="' + pillClass + '">' + pillLabel + '</span>'
+        + '</span>'
+        + '</div>';
+}
+
+function detailCell(a) {
+    if (a.media_type === 'episode') {
+        const s = a.season_number != null ? String(a.season_number).padStart(2, '0') : '??';
+        const e = a.episode_number != null ? String(a.episode_number).padStart(2, '0') : '??';
+        let epName = a.title || '';
+        if (a.grandparent_title && epName.startsWith(a.grandparent_title)) {
+            // Match em-dash too so Plex-supplied episode titles containing a legacy
+            // "Show — Episode" separator still strip cleanly.
+            epName = epName.substring(a.grandparent_title.length).replace(/^\s*[\u2014\-:]\s*/, '');
+        }
+        return '<span class="text-zinc-400 text-[0.85em]">S' + s + 'E' + e + (epName ? ' - ' + esc(epName) : '') + '</span>';
+    }
+    return '';
+}
+
+function sortArrow(key) {
+    const active = currentSort === key;
+    if (!active) return '<span class="text-[0.7rem] opacity-60">\u2195</span>';
+    return '<span class="text-[0.7rem] opacity-100">' + (currentSortDir === 'asc' ? '\u25B2' : '\u25BC') + '</span>';
+}
+
+function toggleColumnFilters() {
+    columnFiltersVisible = !columnFiltersVisible;
+    const row = document.getElementById('activity-filter-row');
+    const btn = document.getElementById('col-filter-toggle');
+    if (row) {
+        row.style.display = columnFiltersVisible ? 'grid' : 'none';
+    }
+    if (columnFiltersVisible) {
+        btn.classList.add('text-zinc-200', 'border-zinc-500', 'bg-indigo-500/15');
+        btn.classList.remove('text-zinc-400', 'border-zinc-600', 'bg-transparent');
+    } else {
+        btn.classList.remove('text-zinc-200', 'border-zinc-500', 'bg-indigo-500/15');
+        btn.classList.add('text-zinc-400', 'border-zinc-600', 'bg-transparent');
+        document.querySelectorAll('#activity-filter-row .col-filter').forEach(input => {
+            input.value = '';
+        });
+        applyColumnFilters();
+    }
+}
+
+function applyColumnFilters() {
+    const inputs = document.querySelectorAll('#activity-filter-row .col-filter');
+    const filters = [];
+    inputs.forEach(input => {
+        filters.push(input.value.toLowerCase().trim());
+    });
+    const rows = document.querySelectorAll('.gtable-row[data-filterable]');
+    rows.forEach(row => {
+        const cells = row.querySelectorAll('[data-col]');
+        let visible = true;
+        cells.forEach(cell => {
+            const idx = parseInt(cell.getAttribute('data-col'));
+            if (filters[idx] && !cell.textContent.toLowerCase().includes(filters[idx])) {
+                visible = false;
+            }
+        });
+        row.style.display = visible ? '' : 'none';
+    });
+}
+
+function renderActivity(data) {
+    const container = document.getElementById('activity-container');
+    const pagination = document.getElementById('activity-pagination');
+    const subtitle = document.getElementById('activity-subtitle');
+
+    if (!data.activity || data.activity.length === 0) {
+        const hasFilters = data.filters && (data.filters.user || data.filters.search || data.filters.media_type);
+        subtitle.textContent = hasFilters ? 'No entries match the current filters' : 'No watch history recorded yet';
+        const tplId = hasFilters ? 'tpl-empty-filtered' : 'tpl-empty-default';
+        const tpl = document.getElementById(tplId);
+        container.innerHTML = '';
+        if (tpl && 'content' in tpl) {
+            container.appendChild(tpl.content.cloneNode(true));
+        }
+        pagination.style.display = 'none';
+        return;
+    }
+
+    const totalStr = data.total.toLocaleString();
+    const usersPart = knownTotalUsers > 0
+        ? ' across ' + knownTotalUsers.toLocaleString() + ' user' + (knownTotalUsers !== 1 ? 's' : '')
+        : '';
+    subtitle.textContent = totalStr + ' entr' + (data.total !== 1 ? 'ies' : 'y') + usersPart;
+
+    let html = '<div class="gtable" role="table">';
+
+    // Header
+    html += '<div class="gtable-header font-semibold text-xs text-zinc-400 uppercase tracking-wide pb-2 border-b-2 border-zinc-700" role="row">';
+    html += '<div role="columnheader" class="cursor-pointer select-none flex items-center gap-1 hover:text-zinc-100' + (currentSort === 'user' ? ' text-zinc-100' : '') + '" onclick="toggleSort(\'user\')">User ' + sortArrow('user') + '</div>';
+    html += '<div role="columnheader" class="cursor-pointer select-none flex items-center gap-1 hover:text-zinc-100' + (currentSort === 'title' ? ' text-zinc-100' : '') + '" onclick="toggleSort(\'title\')">Title ' + sortArrow('title') + '</div>';
+    html += '<div role="columnheader" class="cursor-default select-none flex items-center gap-1">Details</div>';
+    html += '<div role="columnheader" class="cursor-pointer select-none flex items-center gap-1 hover:text-zinc-100' + (currentSort === 'watched' ? ' text-zinc-100' : '') + '" onclick="toggleSort(\'watched\')">Watched ' + sortArrow('watched') + '</div>';
+    html += '<div role="columnheader" class="cursor-default select-none flex items-center gap-1">Progress</div>';
+    html += '</div>';
+
+    // Inline column filter row
+    html += '<div class="gtable-filter py-1.5 px-1 border-b border-zinc-700 bg-white/[0.015]" role="row" id="activity-filter-row" style="display:' + (columnFiltersVisible ? 'grid' : 'none') + ';">';
+    for (let i = 0; i < 5; i++) {
+        html += '<div><input type="text" class="col-filter m-0 py-1 px-1.5 text-xs border border-zinc-700 rounded bg-transparent text-zinc-100 w-full outline-none focus:border-indigo-500" data-col="' + i + '" placeholder="Filter..." oninput="applyColumnFilters()" style="height:auto; line-height:1.2;"></div>';
+    }
+    html += '</div>';
+
+    // Rows
+    for (const a of data.activity) {
+        // Progress = last playback offset as % of runtime. `percent_complete`
+        // is populated directly from the view offset on the native API (no
+        // derivation from per-session play durations).
+        const maxPct = a.max_percent_complete || 0;
+        const pct = (maxPct > 0) ? Math.min(100, maxPct) + '%' : '--';
+
+        html += '<div class="gtable-row py-2.5 px-1 border-b border-zinc-800 text-sm hover:bg-white/[0.02]" role="row" data-filterable>';
+        html += '<div role="cell" data-col="0">'
+            + '<div class="flex items-center gap-2 min-w-0">'
+            + userAvatar(a)
+            + '<span class="' + BADGE_USER + ' truncate max-w-full">' + esc(a.username) + '</span>'
+            + sourceBadge(a.source)
+            + '</div></div>';
+        html += '<div role="cell" data-col="1" class="min-w-0">' + titleCell(a) + '</div>';
+        html += '<div role="cell" data-col="2" class="min-w-0 truncate">' + detailCell(a) + '</div>';
+        html += '<div role="cell" data-col="3" class="text-zinc-100 whitespace-nowrap">' + formatWatchedDate(a.last_watched) + '</div>';
+        html += '<div role="cell" data-col="4" class="text-zinc-100 tabular-nums">' + pct + '</div>';
+        html += '</div>';
+    }
+    html += '</div>';
+    container.innerHTML = html;
+
+    // Pagination
+    const totalPages = Math.ceil(data.total / perPage);
+    if (totalPages > 1) {
+        const dis1 = currentPage <= 1 ? 'disabled' : '';
+        const disN = currentPage >= totalPages ? 'disabled' : '';
+        const btnBase = 'rounded-md border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent px-2 py-1 text-sm disabled:opacity-40 disabled:cursor-not-allowed';
+        pagination.innerHTML =
+            '<button class="' + btnBase + '" ' + dis1 + ' onclick="goPage(1)">\u00ab</button>'
+          + '<button class="' + btnBase + '" ' + dis1 + ' onclick="goPage(' + (currentPage - 1) + ')">\u2039</button>'
+          + '<small class="text-zinc-400 whitespace-nowrap">Page <input type="number" min="1" max="' + totalPages + '" value="' + currentPage + '" '
+          + 'class="w-14 m-0 py-0.5 px-1 text-sm text-center inline-block rounded bg-zinc-800 border border-zinc-700 text-zinc-100" '
+          + 'onchange="goPage(Math.min(Math.max(1,parseInt(this.value)||1),' + totalPages + '))"> of ' + totalPages + '</small>'
+          + '<button class="' + btnBase + '" ' + disN + ' onclick="goPage(' + (currentPage + 1) + ')">\u203a</button>'
+          + '<button class="' + btnBase + '" ' + disN + ' onclick="goPage(' + totalPages + ')">\u00bb</button>'
+          + '<small class="text-zinc-400 ml-3">Show</small>'
+          + '<select class="rounded bg-zinc-800 border border-zinc-700 text-zinc-100 text-sm px-1 py-0.5" onchange="changePageSize(parseInt(this.value))">'
+          + '<option value="25"' + (perPage===25?' selected':'') + '>25</option>'
+          + '<option value="50"' + (perPage===50?' selected':'') + '>50</option>'
+          + '<option value="100"' + (perPage===100?' selected':'') + '>100</option>'
+          + '</select>';
+        pagination.style.display = 'flex';
+    } else {
+        pagination.style.display = 'none';
+    }
+}
+
+function toggleSort(col) {
+    if (currentSort === col) {
+        currentSortDir = currentSortDir === 'asc' ? 'desc' : 'asc';
+    } else {
+        currentSort = col;
+        currentSortDir = col === 'watched' ? 'desc' : 'asc';
+    }
+    currentPage = 1;
+    loadActivity(1);
+}
+
+function changePageSize(size) {
+    perPage = size;
+    currentPage = 1;
+    loadActivity(1);
+}
+
+function getFilterValues() {
+    return {
+        user: document.getElementById('filter-user').value,
+        search: document.getElementById('filter-search').value.trim(),
+        type: document.getElementById('filter-type').value,
+    };
+}
+
+function getFilterParams() {
+    const f = getFilterValues();
+    let qs = 'page=' + currentPage + '&per_page=' + perPage;
+    qs += '&sort=' + currentSort + '&sort_dir=' + currentSortDir;
+    if (f.user) qs += '&user=' + encodeURIComponent(f.user);
+    if (f.search) qs += '&search=' + encodeURIComponent(f.search);
+    if (f.type) qs += '&media_type=' + encodeURIComponent(f.type);
+    return qs;
+}
+
+// ── URL state sync ──
+// Persist user-facing filters in the URL so links are shareable and the
+// browser back button restores previous filter state. Pagination/sort
+// are kept ephemeral (not in URL) to keep URLs short; revisit if users
+// request it.
+function syncFilterStateToUrl(replace) {
+    if (suppressUrlWrite) return;
+    const f = getFilterValues();
+    const params = new URLSearchParams();
+    if (f.user) params.set('user', f.user);
+    if (f.search) params.set('search', f.search);
+    if (f.type) params.set('type', f.type);
+    const qs = params.toString();
+    const newUrl = window.location.pathname + (qs ? '?' + qs : '');
+    const fullCurrent = window.location.pathname + window.location.search;
+    if (newUrl === fullCurrent) return;
+    if (replace) {
+        history.replaceState(null, '', newUrl);
+    } else {
+        history.pushState(null, '', newUrl);
+    }
+}
+
+function applyFilterStateFromUrl() {
+    const params = new URLSearchParams(window.location.search);
+    suppressUrlWrite = true;
+    // User is set after loadUsers() populates <option>s; the value is
+    // stored on the <select> anyway and honoured once the options land.
+    document.getElementById('filter-user').value = params.get('user') || '';
+    document.getElementById('filter-search').value = params.get('search') || '';
+    document.getElementById('filter-type').value = params.get('type') || '';
+    suppressUrlWrite = false;
+}
+
+window.addEventListener('popstate', () => {
+    applyFilterStateFromUrl();
+    currentPage = 1;
+    loadActivity(1);
+});
+
+async function loadActivity(page) {
+    currentPage = page || 1;
+    try {
+        const resp = await fetch('/api/activity/watch?' + getFilterParams());
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const data = await resp.json();
+        renderActivity(data);
+    } catch (err) {
+        document.getElementById('activity-subtitle').textContent = 'Error loading watch history';
+        document.getElementById('activity-container').innerHTML =
+            '<p class="text-rose-400 text-sm">Error: ' + esc(err.message) + '</p>';
+    }
+}
+
+async function loadUsers() {
+    try {
+        const resp = await fetch('/api/users');
+        if (!resp.ok) return;
+        const users = await resp.json();
+        const sel = document.getElementById('filter-user');
+        // Deduplicate by lowercased username so a human with both a Plex
+        // and a Jellyfin account appears once in the dropdown. The backend
+        // already filters case-insensitively on the chosen name.
+        const seen = new Set();
+        const unique = [];
+        for (const u of (users || [])) {
+            if (!u.username) continue;
+            const k = u.username.toLowerCase();
+            if (seen.has(k)) continue;
+            seen.add(k);
+            unique.push(u);
+        }
+        knownTotalUsers = unique.length;
+        const desiredUser = sel.value;
+        for (const u of unique) {
+            const opt = document.createElement('option');
+            opt.value = u.username;
+            opt.textContent = u.username;
+            sel.appendChild(opt);
+        }
+        if (desiredUser) sel.value = desiredUser;
+    } catch (e) {}
+}
+
+function goPage(page) {
+    loadActivity(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function onFilterChange() {
+    currentPage = 1;
+    syncFilterStateToUrl(false);
+    loadActivity(1);
+}
+
+function onSearchInput() {
+    clearTimeout(searchDebounce);
+    searchDebounce = setTimeout(onFilterChange, 300);
+}
+
+document.getElementById('filter-user').addEventListener('change', onFilterChange);
+document.getElementById('filter-type').addEventListener('change', onFilterChange);
+document.getElementById('filter-search').addEventListener('input', onSearchInput);
+
+// Restore filters from URL before the first fetch so shareable links and
+// browser back-navigation work.
+applyFilterStateFromUrl();
+loadUsers();
+loadActivity(1);
+</script>
+{{end}}

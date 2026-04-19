@@ -1,19 +1,15 @@
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
-*.egg-info/
-.venv/
-venv/
-.env
-.env.local
+# Binary
+/reclaimer
 
-# Runtime data (written inside the container at /app/data)
+# Runtime data
 data/
 *.db
 *.db-shm
 *.db-wal
+
+# Environment
+.env
+.env.local
 
 # Editor / OS
 .DS_Store

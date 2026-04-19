@@ -1,0 +1,245 @@
+{{define "content"}}
+<style>
+    @keyframes toast-in {
+        from { opacity: 0; transform: translateY(10px); }
+        to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes toast-out {
+        from { opacity: 1; transform: translateY(0); }
+        to { opacity: 0; transform: translateY(10px); }
+    }
+</style>
+
+<div class="mb-6">
+    <h2 class="text-2xl font-bold text-zinc-100">Media Servers</h2>
+    <p class="text-sm text-zinc-400 mt-1">Connect your media server so Reclaimer can scan libraries and manage content</p>
+</div>
+
+<form id="settings-form">
+
+<!-- Plex -->
+<div class="bg-zinc-900 rounded-lg p-6 border border-zinc-800 mb-6">
+    <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold text-zinc-100">Plex</h3>
+        <span class="text-sm font-normal text-zinc-400" id="status-plex"></span>
+    </div>
+    <div class="mb-4">
+        <label class="block text-sm font-medium text-zinc-300 mb-1">Server URL</label>
+        <input type="text" name="plex_url" placeholder="http://plex:32400"
+               class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+        <p class="text-xs text-zinc-500 mt-1">Full URL to your Plex Media Server, including port. Usually <code class="text-xs bg-zinc-800 px-1 py-0.5 rounded">http://plex:32400</code> if running in Docker on the same network.</p>
+    </div>
+    <div class="mb-4">
+        <label class="block text-sm font-medium text-zinc-300 mb-1">Token</label>
+        <input type="password" name="plex_token" placeholder="(unchanged)"
+               class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+        <p class="text-xs text-zinc-500 mt-1">Your Plex access token. You can find this in Plex settings under Account > Authorized Devices, or by inspecting a Plex web request. Leave empty to keep the current saved token.</p>
+    </div>
+    <div class="mb-4">
+        <label class="block text-sm font-medium text-zinc-300 mb-1">Public URL</label>
+        <input type="text" name="plex_public_url" placeholder="https://plex.example.com"
+               class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+        <p class="text-xs text-zinc-500 mt-1">Public URL for browser links. Leave blank to use the API URL.</p>
+    </div>
+    <button type="button" onclick="testConnection('plex')"
+            class="rounded-md px-3 py-1.5 text-sm font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent">Test Connection</button>
+</div>
+
+<!-- Jellyfin -->
+<div class="bg-zinc-900 rounded-lg p-6 border border-zinc-800 mb-6">
+    <div class="flex items-center justify-between mb-4">
+        <h3 class="text-lg font-semibold text-zinc-100">Jellyfin</h3>
+        <span class="text-sm font-normal text-zinc-400" id="status-jellyfin"></span>
+    </div>
+    <div class="mb-4">
+        <label class="block text-sm font-medium text-zinc-300 mb-1">URL</label>
+        <input type="text" name="jellyfin_url" placeholder="http://jellyfin:8096"
+               class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+        <p class="text-xs text-zinc-500 mt-1">Base URL for your Jellyfin instance.</p>
+    </div>
+    <div class="mb-4">
+        <label class="block text-sm font-medium text-zinc-300 mb-1">API Key</label>
+        <input type="password" name="jellyfin_api_key" placeholder="(unchanged)"
+               class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+        <p class="text-xs text-zinc-500 mt-1">Your Jellyfin API key. Generate one in Jellyfin under Administration > API Keys. Leave empty to keep the current saved key.</p>
+    </div>
+    <div class="mb-4">
+        <label class="block text-sm font-medium text-zinc-300 mb-1">Public URL</label>
+        <input type="text" name="jellyfin_public_url" placeholder="https://jellyfin.example.com"
+               class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+        <p class="text-xs text-zinc-500 mt-1">Public URL for browser links. Leave blank to use the API URL.</p>
+    </div>
+    <button type="button" onclick="testConnection('jellyfin')"
+            class="rounded-md px-3 py-1.5 text-sm font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent">Test Connection</button>
+
+    <hr class="border-zinc-700 my-5">
+
+    <div class="mb-4">
+        <label class="block text-sm font-medium text-zinc-300 mb-1">Movies Library ID</label>
+        <input type="text" name="jellyfin_movies_section" placeholder="e.g. a1b2c3d4..."
+               class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+        <p class="text-xs text-zinc-500 mt-1">The Jellyfin library ID for your Movies library. You can find this in the URL when browsing a library in Jellyfin.</p>
+    </div>
+    <div class="mb-4">
+        <label class="block text-sm font-medium text-zinc-300 mb-1">TV Library ID</label>
+        <input type="text" name="jellyfin_tv_section" placeholder="e.g. e5f6g7h8..."
+               class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+        <p class="text-xs text-zinc-500 mt-1">The Jellyfin library ID for your TV Shows library.</p>
+    </div>
+    <div class="mb-4">
+        <label class="block text-sm font-medium text-zinc-300 mb-1">Movies Keep Collection</label>
+        <input type="text" name="jellyfin_movies_keep_collection" placeholder="e.g. Keepers"
+               class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+        <p class="text-xs text-zinc-500 mt-1">Name of a Jellyfin collection whose items are protected from removal. Leave blank to disable.</p>
+    </div>
+    <div>
+        <label class="block text-sm font-medium text-zinc-300 mb-1">TV Keep Collection</label>
+        <input type="text" name="jellyfin_tv_keep_collection" placeholder="e.g. Keepers"
+               class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+        <p class="text-xs text-zinc-500 mt-1">Name of a Jellyfin collection whose TV shows are protected from removal. Leave blank to disable.</p>
+    </div>
+</div>
+
+<!-- Sticky save bar -->
+<div class="sticky bottom-0 bg-zinc-950 py-4 border-t border-zinc-800 mt-6 flex justify-end gap-3">
+    <button type="submit" id="save-btn"
+            class="rounded-md px-3 py-1.5 text-sm font-medium bg-indigo-500 hover:bg-indigo-400 text-white">Save Settings</button>
+</div>
+
+</form>
+
+<!-- Toast container -->
+<div class="fixed bottom-6 right-6 z-[9999] flex flex-col gap-2" id="toast-container"></div>
+
+<script>
+(function() {
+    const SENSITIVE_PLACEHOLDER = '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022';
+    const sensitiveKeys = new Set();
+
+    function toast(msg, type) {
+        const container = document.getElementById('toast-container');
+        const el = document.createElement('div');
+        const bg = type === 'success' ? 'bg-emerald-600' : 'bg-rose-600';
+        el.className = `${bg} text-white text-sm font-medium px-5 py-3 rounded-md shadow-lg max-w-sm`;
+        el.style.animation = 'toast-in 0.25s ease-out';
+        el.textContent = msg;
+        container.appendChild(el);
+        setTimeout(() => {
+            el.style.animation = 'toast-out 0.25s ease-in forwards';
+            setTimeout(() => el.remove(), 250);
+        }, 3000);
+    }
+
+    function populateForm(settings) {
+        for (const [key, val] of Object.entries(settings)) {
+            const el = document.querySelector(`[name="${key}"]`);
+            if (!el) continue;
+
+            if (val === SENSITIVE_PLACEHOLDER) {
+                sensitiveKeys.add(key);
+                el.value = '';
+                el.placeholder = '(unchanged - leave blank to keep current)';
+                continue;
+            }
+
+            if (el.tagName === 'SELECT') {
+                el.value = val;
+            } else {
+                el.value = val ?? '';
+            }
+        }
+    }
+
+    document.getElementById('settings-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+
+        const formData = new FormData(e.target);
+        const updates = {};
+
+        const allKeys = [
+            'plex_url', 'plex_public_url', 'plex_token',
+            'jellyfin_url', 'jellyfin_public_url', 'jellyfin_api_key',
+            'jellyfin_movies_section', 'jellyfin_tv_section',
+            'jellyfin_movies_keep_collection', 'jellyfin_tv_keep_collection',
+        ];
+
+        for (const key of allKeys) {
+            if (sensitiveKeys.has(key)) {
+                const val = formData.get(key);
+                if (val && val.trim() !== '') updates[key] = val;
+            } else {
+                updates[key] = formData.get(key) ?? '';
+            }
+        }
+
+        const btn = document.getElementById('save-btn');
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+        btn.classList.add('opacity-50', 'cursor-not-allowed');
+
+        fetch('/api/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ settings: updates }),
+        })
+        .then(r => {
+            if (!r.ok) throw new Error('Server returned ' + r.status);
+            return r.json();
+        })
+        .then(data => {
+            const count = (data.updated || []).length;
+            toast('Settings saved (' + count + ' fields updated)', 'success');
+        })
+        .catch(err => toast('Failed to save: ' + err.message, 'error'))
+        .finally(() => {
+            btn.disabled = false;
+            btn.textContent = 'Save Settings';
+            btn.classList.remove('opacity-50', 'cursor-not-allowed');
+        });
+    });
+
+    window.testConnection = function(service) {
+        const statusEl = document.getElementById('status-' + service);
+        statusEl.innerHTML = '<span class="text-zinc-400">Testing...</span>';
+
+        const payload = { service };
+        const urlInput = document.querySelector(`[name="${service}_url"]`);
+        const keyInput = document.querySelector(`[name="${service}_api_key"]`) ||
+                         document.querySelector(`[name="${service}_token"]`);
+
+        if (urlInput && urlInput.value) payload.url = urlInput.value;
+        if (keyInput && keyInput.value) payload.api_key = keyInput.value;
+
+        if (service === 'plex') {
+            const tokenInput = document.querySelector('[name="plex_token"]');
+            if (tokenInput && tokenInput.value) payload.api_key = tokenInput.value;
+        }
+
+        fetch('/api/settings/test-connection', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.ok) {
+                statusEl.innerHTML = '<span class="text-emerald-400">' + (data.detail || 'Connected') + '</span>';
+            } else {
+                statusEl.innerHTML = '<span class="text-rose-400">Failed: ' + (data.error || 'Unknown') + '</span>';
+            }
+        })
+        .catch(() => {
+            statusEl.innerHTML = '<span class="text-rose-400">Request failed</span>';
+        });
+    };
+
+    fetch('/api/settings')
+        .then(r => {
+            if (!r.ok) throw new Error('Server returned ' + r.status);
+            return r.json();
+        })
+        .then(settings => populateForm(settings))
+        .catch(err => toast('Failed to load settings: ' + err.message, 'error'));
+})();
+</script>
+{{end}}

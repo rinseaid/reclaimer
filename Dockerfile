@@ -1,22 +1,30 @@
-FROM python:3.14-slim
+FROM golang:1.23-alpine AS builder
+
+WORKDIR /build
+
+COPY go.mod go.sum ./
+RUN go mod download
+
+COPY . .
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /reclaimer ./cmd/reclaimer
+
+FROM alpine:3.20
+
+RUN apk add --no-cache ca-certificates tzdata
 
 WORKDIR /app
 
-COPY requirements.txt .
-RUN pip install --no-cache-dir -r requirements.txt
+COPY --from=builder /reclaimer /app/reclaimer
+COPY --from=builder /build/internal/web/templates /app/templates
 
-COPY app/ app/
-
-# Drop privileges: run as a non-root user. The data directory is created
-# and handed to the runtime user so SQLite can open its WAL-mode files.
 ARG RECLAIMER_UID=1000
 ARG RECLAIMER_GID=1000
-RUN groupadd --system --gid ${RECLAIMER_GID} reclaimer \
- && useradd --system --uid ${RECLAIMER_UID} --gid reclaimer --home-dir /app --shell /usr/sbin/nologin reclaimer \
- && mkdir -p /app/data \
+RUN addgroup -S -g ${RECLAIMER_GID} reclaimer \
+ && adduser -S -u ${RECLAIMER_UID} -G reclaimer -h /app -s /sbin/nologin reclaimer \
+ && mkdir -p /app/data /app/data/poster-cache \
  && chown -R reclaimer:reclaimer /app
 
 USER reclaimer
 
 EXPOSE 8080
-CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]
+CMD ["/app/reclaimer"]
