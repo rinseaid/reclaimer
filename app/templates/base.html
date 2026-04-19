@@ -12,20 +12,6 @@
     // system changes at runtime (see the listener further down).
     (function () {
         try {
-            // Forward-migrate localStorage keys through every past brand:
-            // mcm-* -> jettison-* -> reclaimer-*. A single boot under each
-            // brand upgrades the keys; the legacy ones get deleted as we go.
-            const PREFIXES = ['mcm-', 'jettison-'];
-            for (const legacyPrefix of PREFIXES) {
-                for (const k of Object.keys(localStorage)) {
-                    if (!k.startsWith(legacyPrefix)) continue;
-                    const newKey = 'reclaimer-' + k.slice(legacyPrefix.length);
-                    if (localStorage.getItem(newKey) === null) {
-                        localStorage.setItem(newKey, localStorage.getItem(k));
-                    }
-                    localStorage.removeItem(k);
-                }
-            }
             const saved = localStorage.getItem('reclaimer-theme');
             const pref = (saved === 'dark' || saved === 'light') ? saved : 'auto';
             const resolved = pref === 'auto'
