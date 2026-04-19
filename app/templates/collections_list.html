@@ -438,39 +438,15 @@ window.showToast = function(message, kind) {
     }
 
     function renderEmptyState() {
-        // Inline SVG: library-shelf composition with a small clock overlay.
-        // No external deps; scales cleanly at any size.
+        // Lone Reclaimer mark, upscaled; same glyph as the sidebar + favicon
+        // so the brand reads consistently across surfaces.
         const illustrationSvg = `
-            <svg viewBox="0 0 200 140" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"
-                 class="w-44 h-32 mx-auto mb-6">
-              <defs>
-                <linearGradient id="reclaimer-hero-g" x1="0" x2="1" y1="0" y2="1">
-                  <stop offset="0" stop-color="#6366f1" stop-opacity="0.35"/>
-                  <stop offset="1" stop-color="#818cf8" stop-opacity="0.08"/>
-                </linearGradient>
-              </defs>
-              <rect x="22" y="28" width="140" height="90" rx="4" fill="url(#reclaimer-hero-g)" stroke="#4f46e5" stroke-width="1.5"/>
-              <line x1="22" y1="72" x2="162" y2="72" stroke="#4f46e5" stroke-width="1" opacity="0.5"/>
-              <rect x="30"  y="36" width="10" height="32" rx="1" fill="#818cf8"/>
-              <rect x="42"  y="40" width="8"  height="28" rx="1" fill="#a5b4fc"/>
-              <rect x="52"  y="34" width="12" height="34" rx="1" fill="#6366f1"/>
-              <rect x="66"  y="44" width="9"  height="24" rx="1" fill="#c7d2fe"/>
-              <rect x="77"  y="38" width="11" height="30" rx="1" fill="#818cf8"/>
-              <rect x="90"  y="42" width="8"  height="26" rx="1" fill="#a5b4fc"/>
-              <rect x="100" y="36" width="10" height="32" rx="1" fill="#6366f1"/>
-              <rect x="112" y="40" width="9"  height="28" rx="1" fill="#c7d2fe"/>
-              <rect x="123" y="34" width="11" height="34" rx="1" fill="#818cf8"/>
-              <rect x="136" y="42" width="8"  height="26" rx="1" fill="#a5b4fc"/>
-              <rect x="146" y="38" width="11" height="30" rx="1" fill="#6366f1"/>
-              <rect x="30"  y="80" width="9"  height="30" rx="1" fill="#c7d2fe"/>
-              <rect x="41"  y="84" width="11" height="26" rx="1" fill="#818cf8"/>
-              <rect x="54"  y="78" width="10" height="32" rx="1" fill="#6366f1"/>
-              <rect x="66"  y="82" width="9"  height="28" rx="1" fill="#a5b4fc"/>
-              <rect x="77"  y="86" width="8"  height="24" rx="1" fill="#c7d2fe"/>
-              <circle cx="142" cy="98" r="18" fill="#18181b" stroke="#6366f1" stroke-width="2"/>
-              <line x1="142" y1="98" x2="142" y2="87" stroke="#a5b4fc" stroke-width="2" stroke-linecap="round"/>
-              <line x1="142" y1="98" x2="150" y2="101" stroke="#a5b4fc" stroke-width="2" stroke-linecap="round"/>
-              <circle cx="142" cy="98" r="1.5" fill="#a5b4fc"/>
+            <svg viewBox="0 0 120 120" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"
+                 class="w-24 h-24 mx-auto mb-6 text-indigo-500"
+                 fill="none" stroke="currentColor" stroke-width="18"
+                 stroke-linecap="round" stroke-linejoin="round">
+              <path d="M105 60a45 45 0 1 1-45-45c12.6 0 24.65 5 33.7 13.7L105 40"/>
+              <path d="M105 15v25h-25"/>
             </svg>`;
 
         return `
