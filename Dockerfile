@@ -9,14 +9,14 @@ COPY app/ app/
 
 # Drop privileges: run as a non-root user. The data directory is created
 # and handed to the runtime user so SQLite can open its WAL-mode files.
-ARG JETTISON_UID=1000
-ARG JETTISON_GID=1000
-RUN groupadd --system --gid ${JETTISON_GID} jettison \
- && useradd --system --uid ${JETTISON_UID} --gid jettison --home-dir /app --shell /usr/sbin/nologin jettison \
+ARG RECLAIMER_UID=1000
+ARG RECLAIMER_GID=1000
+RUN groupadd --system --gid ${RECLAIMER_GID} reclaimer \
+ && useradd --system --uid ${RECLAIMER_UID} --gid reclaimer --home-dir /app --shell /usr/sbin/nologin reclaimer \
  && mkdir -p /app/data \
- && chown -R jettison:jettison /app
+ && chown -R reclaimer:reclaimer /app
 
-USER jettison
+USER reclaimer
 
 EXPOSE 8080
 CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8080"]

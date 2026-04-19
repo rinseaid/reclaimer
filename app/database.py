@@ -8,11 +8,14 @@ from pathlib import Path
 
 log = logging.getLogger(__name__)
 
-DB_PATH = Path("/app/data/jettison.db")
-# Legacy filename from the pre-rename era. Moved to DB_PATH by
-# ``init_db`` on first boot after the rename; once migrated, the file
-# will never exist again.
-_LEGACY_DB_PATH = Path("/app/data/mcm.db")
+DB_PATH = Path("/app/data/reclaimer.db")
+# Historical filenames from prior renames. Checked in order on boot;
+# the first match is renamed to DB_PATH. After a single successful
+# boot the legacy files are gone and this list never fires again.
+_LEGACY_DB_PATHS = (
+    Path("/app/data/jettison.db"),
+    Path("/app/data/mcm.db"),
+)
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS settings (
@@ -348,25 +351,28 @@ def _migrate(conn: sqlite3.Connection) -> None:
 
 
 def _migrate_legacy_db_filename() -> None:
-    """Move ``mcm.db`` -> ``jettison.db`` on first boot after the rename.
+    """Pick up an older DB filename (``jettison.db``, ``mcm.db``) and
+    rename it to ``reclaimer.db`` on first boot after a project rename.
 
-    The WAL sidecar files (``mcm.db-shm``, ``mcm.db-wal``) are not carried
-    over because they're recreated automatically on first open; leaving
-    them behind would point SQLite at a non-existent main file, so we
-    drop them here.
+    The WAL sidecar files are not carried over because SQLite recreates
+    them on first open; leaving them behind would point SQLite at a
+    non-existent main file, so we drop them here.
     """
-    if DB_PATH.exists() or not _LEGACY_DB_PATH.exists():
+    if DB_PATH.exists():
+        return
+    legacy = next((p for p in _LEGACY_DB_PATHS if p.exists()), None)
+    if legacy is None:
         return
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
-    _LEGACY_DB_PATH.rename(DB_PATH)
+    legacy.rename(DB_PATH)
     for suffix in ("-shm", "-wal"):
-        stale = _LEGACY_DB_PATH.with_name(_LEGACY_DB_PATH.name + suffix)
+        stale = legacy.with_name(legacy.name + suffix)
         if stale.exists():
             try:
                 stale.unlink()
             except OSError:
                 pass
-    log.info("Migration: renamed %s -> %s", _LEGACY_DB_PATH, DB_PATH)
+    log.info("Migration: renamed %s -> %s", legacy, DB_PATH)
 
 
 def init_db() -> None:
