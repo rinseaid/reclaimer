@@ -76,9 +76,6 @@ func (s *Server) Routes(r chi.Router) {
 	r.Get("/activity", s.render("activity.html", "Watch History", nil))
 	r.Get("/settings", s.render("settings_media.html", "Settings", nil))
 	r.Get("/settings/media", s.render("settings_media.html", "Media Servers", nil))
-	r.Get("/settings/statistics", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/settings/media", http.StatusFound)
-	})
 	r.Get("/settings/downloads", s.render("settings_downloads.html", "Downloaders", nil))
 	r.Get("/settings/notifications", s.render("settings_notifications.html", "Notifications", nil))
 	r.Get("/settings/schedule", s.render("settings_schedule.html", "Schedule", nil))
