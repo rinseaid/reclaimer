@@ -47,12 +47,6 @@
                class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
         <p class="text-xs text-zinc-500 mt-1">Auto-filled by sign-in, or enter manually. Leave empty to keep the current saved token.</p>
     </div>
-    <div class="mb-4">
-        <label class="block text-sm font-medium text-zinc-300 mb-1">Public URL</label>
-        <input type="text" name="plex_public_url" placeholder="https://plex.example.com"
-               class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
-        <p class="text-xs text-zinc-500 mt-1">Public URL for browser links. Leave blank to use the API URL.</p>
-    </div>
     <button type="button" onclick="testConnection('plex')"
             class="rounded-md px-3 py-1.5 text-sm font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent">Test Connection</button>
 </div>
@@ -169,7 +163,7 @@
         const updates = {};
 
         const allKeys = [
-            'plex_url', 'plex_public_url', 'plex_token',
+            'plex_url', 'plex_token',
             'jellyfin_url', 'jellyfin_public_url', 'jellyfin_api_key',
             'jellyfin_movies_section', 'jellyfin_tv_section',
             'jellyfin_movies_keep_collection', 'jellyfin_tv_keep_collection',
@@ -209,9 +203,7 @@
         });
     });
 
-    // ── Plex OAuth sign-in ──
-    let plexPollTimer = null;
-
+    // ── Plex OAuth sign-in (redirect method) ──
     window.plexSignIn = function() {
         const btn = document.getElementById('plex-signin-btn');
         const status = document.getElementById('plex-auth-status');
@@ -222,37 +214,56 @@
             .then(r => r.json())
             .then(data => {
                 if (data.error) { status.innerHTML = '<span class="text-rose-400">' + data.error + '</span>'; btn.disabled = false; return; }
-                window.open(data.auth_url, 'plexAuth', 'width=800,height=700');
-                status.innerHTML = '<span class="text-zinc-400">Waiting for authorization...</span>';
-
-                plexPollTimer = setInterval(() => {
-                    fetch('/api/settings/plex-auth/' + data.pin_id)
-                        .then(r => r.json())
-                        .then(pin => {
-                            if (pin.waiting) return;
-                            clearInterval(plexPollTimer);
-                            plexPollTimer = null;
-                            document.querySelector('[name="plex_token"]').value = pin.auth_token;
-                            status.innerHTML = '<span class="text-emerald-400">Authenticated! Select a server below.</span>';
-                            btn.disabled = false;
-                            plexFetchServers(pin.auth_token);
-                        });
-                }, 2000);
-
-                setTimeout(() => {
-                    if (plexPollTimer) {
-                        clearInterval(plexPollTimer);
-                        plexPollTimer = null;
-                        btn.disabled = false;
-                        status.innerHTML = '<span class="text-rose-400">Timed out waiting for authorization.</span>';
-                    }
-                }, 300000);
+                sessionStorage.setItem('plex_pin_id', data.pin_id);
+                const forwardUrl = encodeURIComponent(window.location.href);
+                window.location.href = data.auth_url + '&forwardUrl=' + forwardUrl;
             })
             .catch(err => {
                 btn.disabled = false;
                 status.innerHTML = '<span class="text-rose-400">Failed: ' + err.message + '</span>';
             });
     };
+
+    function resumePlexAuth(pinId) {
+        const btn = document.getElementById('plex-signin-btn');
+        const status = document.getElementById('plex-auth-status');
+        btn.disabled = true;
+        status.innerHTML = '<span class="text-zinc-400">Completing authorization...</span>';
+
+        let attempts = 0;
+        const maxAttempts = 10;
+        const poll = () => {
+            fetch('/api/settings/plex-auth/' + pinId)
+                .then(r => r.json())
+                .then(pin => {
+                    if (pin.waiting) {
+                        attempts++;
+                        if (attempts >= maxAttempts) {
+                            sessionStorage.removeItem('plex_pin_id');
+                            btn.disabled = false;
+                            status.innerHTML = '<span class="text-rose-400">Authorization not completed. Try again.</span>';
+                            return;
+                        }
+                        setTimeout(poll, 2000);
+                        return;
+                    }
+                    sessionStorage.removeItem('plex_pin_id');
+                    document.querySelector('[name="plex_token"]').value = pin.auth_token;
+                    status.innerHTML = '<span class="text-emerald-400">Authenticated! Select a server below.</span>';
+                    btn.disabled = false;
+                    plexFetchServers(pin.auth_token);
+                })
+                .catch(() => {
+                    sessionStorage.removeItem('plex_pin_id');
+                    btn.disabled = false;
+                    status.innerHTML = '<span class="text-rose-400">Failed to check authorization.</span>';
+                });
+        };
+        poll();
+    }
+
+    const pendingPin = sessionStorage.getItem('plex_pin_id');
+    if (pendingPin) resumePlexAuth(pendingPin);
 
     function plexFetchServers(token) {
         fetch('/api/settings/plex-servers?token=' + encodeURIComponent(token))
