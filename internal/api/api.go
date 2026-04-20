@@ -650,7 +650,7 @@ func (s *Server) handleSearchItems(w http.ResponseWriter, r *http.Request) {
 
 	// TODO: also search Plex libraries via API
 
-	writeJSON(w, http.StatusOK, map[string]any{"items": items})
+	writeJSON(w, http.StatusOK, map[string]any{"results": items})
 }
 
 func (s *Server) handleWatchlistMembers(w http.ResponseWriter, r *http.Request) {
