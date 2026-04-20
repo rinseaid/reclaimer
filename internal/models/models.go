@@ -2,9 +2,72 @@ package models
 
 import (
 	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
 	"time"
 )
+
+// NullString wraps sql.NullString with JSON-friendly marshaling.
+type NullString struct{ sql.NullString }
+
+func (n NullString) MarshalJSON() ([]byte, error) {
+	if !n.Valid {
+		return []byte("null"), nil
+	}
+	return json.Marshal(n.String)
+}
+
+func (n *NullString) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		n.Valid = false
+		return nil
+	}
+	n.Valid = true
+	return json.Unmarshal(b, &n.String)
+}
+
+// NullInt64 wraps sql.NullInt64 with JSON-friendly marshaling.
+type NullInt64 struct{ sql.NullInt64 }
+
+func (n NullInt64) MarshalJSON() ([]byte, error) {
+	if !n.Valid {
+		return []byte("null"), nil
+	}
+	return json.Marshal(n.Int64)
+}
+
+func (n *NullInt64) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		n.Valid = false
+		return nil
+	}
+	n.Valid = true
+	return json.Unmarshal(b, &n.Int64)
+}
+
+// NullFloat64 wraps sql.NullFloat64 with JSON-friendly marshaling.
+type NullFloat64 struct{ sql.NullFloat64 }
+
+func (n NullFloat64) MarshalJSON() ([]byte, error) {
+	if !n.Valid {
+		return []byte("null"), nil
+	}
+	return json.Marshal(n.Float64)
+}
+
+func (n *NullFloat64) UnmarshalJSON(b []byte) error {
+	if string(b) == "null" {
+		n.Valid = false
+		return nil
+	}
+	n.Valid = true
+	return json.Unmarshal(b, &n.Float64)
+}
+
+// Ensure driver.Valuer is implemented for database scanning.
+func (n NullString) Value() (driver.Value, error)  { return n.NullString.Value() }
+func (n NullInt64) Value() (driver.Value, error)    { return n.NullInt64.Value() }
+func (n NullFloat64) Value() (driver.Value, error)  { return n.NullFloat64.Value() }
 
 type ItemStatus string
 
@@ -19,23 +82,23 @@ type Item struct {
 	ID             int64          `db:"id" json:"id"`
 	RatingKey      string         `db:"rating_key" json:"rating_key"`
 	Collection     string         `db:"collection" json:"collection"`
-	Title          sql.NullString `db:"title" json:"title"`
+	Title          NullString `db:"title" json:"title"`
 	MediaType      string         `db:"media_type" json:"media_type"`
-	TmdbID         sql.NullInt64  `db:"tmdb_id" json:"tmdb_id"`
-	TvdbID         sql.NullInt64  `db:"tvdb_id" json:"tvdb_id"`
-	ImdbID         sql.NullString `db:"imdb_id" json:"imdb_id"`
-	ArrID          sql.NullInt64  `db:"arr_id" json:"arr_id"`
-	SeasonNumber   sql.NullInt64  `db:"season_number" json:"season_number"`
-	ShowRatingKey  sql.NullString `db:"show_rating_key" json:"show_rating_key"`
+	TmdbID         NullInt64  `db:"tmdb_id" json:"tmdb_id"`
+	TvdbID         NullInt64  `db:"tvdb_id" json:"tvdb_id"`
+	ImdbID         NullString `db:"imdb_id" json:"imdb_id"`
+	ArrID          NullInt64  `db:"arr_id" json:"arr_id"`
+	SeasonNumber   NullInt64  `db:"season_number" json:"season_number"`
+	ShowRatingKey  NullString `db:"show_rating_key" json:"show_rating_key"`
 	SizeBytes      int64          `db:"size_bytes" json:"size_bytes"`
 	FirstSeen      string         `db:"first_seen" json:"first_seen"`
 	LastSeen       string         `db:"last_seen" json:"last_seen"`
 	GraceExpires   string         `db:"grace_expires" json:"grace_expires"`
 	Status         string         `db:"status" json:"status"`
-	ActionTaken    sql.NullString `db:"action_taken" json:"action_taken"`
-	ActionDate     sql.NullString `db:"action_date" json:"action_date"`
-	Override       sql.NullString `db:"override" json:"override"`
-	OverrideBy     sql.NullString `db:"override_by" json:"override_by"`
+	ActionTaken    NullString `db:"action_taken" json:"action_taken"`
+	ActionDate     NullString `db:"action_date" json:"action_date"`
+	Override       NullString `db:"override" json:"override"`
+	OverrideBy     NullString `db:"override_by" json:"override_by"`
 }
 
 type RuleResult struct {
@@ -51,10 +114,10 @@ type RuleResult struct {
 
 type User struct {
 	ID         int64          `db:"id" json:"id"`
-	PlexUserID sql.NullInt64  `db:"plex_user_id" json:"plex_user_id"`
+	PlexUserID NullInt64  `db:"plex_user_id" json:"plex_user_id"`
 	Username   string         `db:"username" json:"username"`
-	Email      sql.NullString `db:"email" json:"email"`
-	Thumb      sql.NullString `db:"thumb" json:"thumb"`
+	Email      NullString `db:"email" json:"email"`
+	Thumb      NullString `db:"thumb" json:"thumb"`
 	IsProtected bool          `db:"is_protected" json:"is_protected"`
 	LastSynced  string        `db:"last_synced" json:"last_synced"`
 	Source      string        `db:"source" json:"source"`
@@ -64,11 +127,11 @@ type WatchHistory struct {
 	ID               int64          `db:"id" json:"id"`
 	UserID           int64          `db:"user_id" json:"user_id"`
 	RatingKey        string         `db:"rating_key" json:"rating_key"`
-	Title            sql.NullString `db:"title" json:"title"`
-	GrandparentTitle sql.NullString `db:"grandparent_title" json:"grandparent_title"`
-	MediaType        sql.NullString `db:"media_type" json:"media_type"`
-	SeasonNumber     sql.NullInt64  `db:"season_number" json:"season_number"`
-	EpisodeNumber    sql.NullInt64  `db:"episode_number" json:"episode_number"`
+	Title            NullString `db:"title" json:"title"`
+	GrandparentTitle NullString `db:"grandparent_title" json:"grandparent_title"`
+	MediaType        NullString `db:"media_type" json:"media_type"`
+	SeasonNumber     NullInt64  `db:"season_number" json:"season_number"`
+	EpisodeNumber    NullInt64  `db:"episode_number" json:"episode_number"`
 	WatchedAt        string         `db:"watched_at" json:"watched_at"`
 	PlayDuration     int64          `db:"play_duration" json:"play_duration"`
 	MediaDuration    int64          `db:"media_duration" json:"media_duration"`
@@ -79,10 +142,10 @@ type ActivityLog struct {
 	ID        int64          `db:"id" json:"id"`
 	Timestamp string         `db:"timestamp" json:"timestamp"`
 	EventType string         `db:"event_type" json:"event_type"`
-	Collection sql.NullString `db:"collection" json:"collection"`
-	RatingKey  sql.NullString `db:"rating_key" json:"rating_key"`
-	Title      sql.NullString `db:"title" json:"title"`
-	Detail     sql.NullString `db:"detail" json:"detail"`
+	Collection NullString `db:"collection" json:"collection"`
+	RatingKey  NullString `db:"rating_key" json:"rating_key"`
+	Title      NullString `db:"title" json:"title"`
+	Detail     NullString `db:"detail" json:"detail"`
 }
 
 type DebridCache struct {
@@ -100,9 +163,9 @@ type CollectionConfig struct {
 	MediaType    string         `db:"media_type" json:"media_type"`
 	Action       string         `db:"action" json:"action"`
 	GraceDays    int            `db:"grace_days" json:"grace_days"`
-	Criteria     sql.NullString `db:"criteria" json:"criteria"`
+	Criteria     NullString `db:"criteria" json:"criteria"`
 	Enabled      bool           `db:"enabled" json:"enabled"`
-	ScheduleCron sql.NullString `db:"schedule_cron" json:"schedule_cron"`
+	ScheduleCron NullString `db:"schedule_cron" json:"schedule_cron"`
 	Priority     int            `db:"priority" json:"priority"`
 	CreatedAt    string         `db:"created_at" json:"created_at"`
 	UpdatedAt    string         `db:"updated_at" json:"updated_at"`
@@ -110,9 +173,9 @@ type CollectionConfig struct {
 
 type RatingsCache struct {
 	ImdbID     string          `db:"imdb_id" json:"imdb_id"`
-	ImdbRating sql.NullFloat64 `db:"imdb_rating" json:"imdb_rating"`
-	RtScore    sql.NullInt64   `db:"rt_score" json:"rt_score"`
-	Metacritic sql.NullInt64   `db:"metacritic" json:"metacritic"`
+	ImdbRating NullFloat64 `db:"imdb_rating" json:"imdb_rating"`
+	RtScore    NullInt64   `db:"rt_score" json:"rt_score"`
+	Metacritic NullInt64   `db:"metacritic" json:"metacritic"`
 	FetchedAt  string          `db:"fetched_at" json:"fetched_at"`
 }
 
