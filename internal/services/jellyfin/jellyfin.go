@@ -554,6 +554,41 @@ func TestConnection(url, apiKey string) (map[string]any, error) {
 	}, nil
 }
 
+// SearchLibrary searches across Jellyfin libraries for movies and series
+// matching the query string.
+func SearchLibrary(url, apiKey, query string) ([]map[string]any, error) {
+	var envelope struct {
+		Items []map[string]any `json:"Items"`
+	}
+	err := doJSON(url, apiKey, http.MethodGet, "/Items", map[string]string{
+		"SearchTerm":       query,
+		"Recursive":        "true",
+		"IncludeItemTypes": "Movie,Series",
+		"Limit":            "25",
+	}, &envelope)
+	if err != nil {
+		return nil, fmt.Errorf("SearchLibrary: %w", err)
+	}
+
+	results := make([]map[string]any, 0, len(envelope.Items))
+	for _, item := range envelope.Items {
+		id, _ := item["Id"].(string)
+		name, _ := item["Name"].(string)
+		itemType, _ := item["Type"].(string)
+		mediaType := "movie"
+		if itemType == "Series" {
+			mediaType = "show"
+		}
+		results = append(results, map[string]any{
+			"rating_key": id,
+			"title":      name,
+			"media_type": mediaType,
+			"source":     "jellyfin",
+		})
+	}
+	return results, nil
+}
+
 // ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------

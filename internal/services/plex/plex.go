@@ -630,6 +630,43 @@ func ItemURI(plexURL, plexToken, ratingKey string) (string, error) {
 	return fmt.Sprintf("server://%s/com.plexapp.plugins.library/library/metadata/%s", mid, ratingKey), nil
 }
 
+// SearchLibrary searches across Plex library sections for movies and shows
+// matching the query string. Returns lightweight result maps with rating_key,
+// title, media_type, and source fields.
+func SearchLibrary(plexURL, plexToken, query string) ([]map[string]any, error) {
+	var resp plexResponse
+	err := doReqJSON(http.MethodGet, plexURL, plexToken, "/hubs/search", map[string]string{
+		"query": query,
+		"limit": "25",
+	}, &resp)
+	if err != nil {
+		return nil, fmt.Errorf("SearchLibrary: %w", err)
+	}
+
+	hubs, _ := resp.MediaContainer["Hub"].([]any)
+	var results []map[string]any
+	for _, h := range hubs {
+		hub, ok := h.(map[string]any)
+		if !ok {
+			continue
+		}
+		hubType := toString(hub["type"])
+		if hubType != "movie" && hubType != "show" {
+			continue
+		}
+		items, _ := metadataSlice(hub, "Metadata")
+		for _, item := range items {
+			results = append(results, map[string]any{
+				"rating_key": toString(item["ratingKey"]),
+				"title":      toString(item["title"]),
+				"media_type": hubType,
+				"source":     "plex",
+			})
+		}
+	}
+	return results, nil
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------
