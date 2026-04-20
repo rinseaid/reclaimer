@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"sync"
 	"time"
@@ -34,12 +35,13 @@ func Client() *http.Client {
 
 // Request is a convenience wrapper for making HTTP requests.
 type Request struct {
-	Method  string
-	URL     string
-	Headers map[string]string
-	Params  map[string]string
-	Body    io.Reader
-	Timeout time.Duration
+	Method    string
+	URL       string
+	Headers   map[string]string
+	Params    map[string]string
+	RawParams map[string]string // appended without percent-encoding the key (for APIs like Plex that use operators in param names)
+	Body      io.Reader
+	Timeout   time.Duration
 }
 
 // Do executes the request and returns the response.
@@ -57,12 +59,19 @@ func Do(r Request) (*http.Response, error) {
 		req.Header.Set(k, v)
 	}
 
-	if len(r.Params) > 0 {
+	if len(r.Params) > 0 || len(r.RawParams) > 0 {
 		q := req.URL.Query()
 		for k, v := range r.Params {
 			q.Set(k, v)
 		}
-		req.URL.RawQuery = q.Encode()
+		raw := q.Encode()
+		for k, v := range r.RawParams {
+			if raw != "" {
+				raw += "&"
+			}
+			raw += k + "=" + url.QueryEscape(v)
+		}
+		req.URL.RawQuery = raw
 	}
 
 	client := Client()

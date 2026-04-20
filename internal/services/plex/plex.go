@@ -23,29 +23,44 @@ var (
 	machineOnce sync.Mutex
 )
 
+// plexParams holds normal and raw (un-encoded key) query parameters for a Plex request.
+type plexParams struct {
+	Normal map[string]string
+	Raw    map[string]string // keys containing operators like > or >= that must not be percent-encoded
+}
+
 // doReq executes an HTTP request against the Plex server, adding the token as
 // a query parameter and requesting JSON responses.
 func doReq(method, plexURL, plexToken, path string, extraParams map[string]string) (*http.Response, error) {
+	return doReqRaw(method, plexURL, plexToken, path, plexParams{Normal: extraParams})
+}
+
+func doReqRaw(method, plexURL, plexToken, path string, pp plexParams) (*http.Response, error) {
 	params := map[string]string{
 		"X-Plex-Token": plexToken,
 	}
-	for k, v := range extraParams {
+	for k, v := range pp.Normal {
 		params[k] = v
 	}
 	headers := map[string]string{
 		"Accept": "application/json",
 	}
 	return httpclient.Do(httpclient.Request{
-		Method:  method,
-		URL:     plexURL + path,
-		Headers: headers,
-		Params:  params,
+		Method:    method,
+		URL:       plexURL + path,
+		Headers:   headers,
+		Params:    params,
+		RawParams: pp.Raw,
 	})
 }
 
 // doReqJSON executes an HTTP request and decodes the response JSON into dst.
 func doReqJSON(method, plexURL, plexToken, path string, extraParams map[string]string, dst any) error {
-	resp, err := doReq(method, plexURL, plexToken, path, extraParams)
+	return doReqJSONRaw(method, plexURL, plexToken, path, plexParams{Normal: extraParams}, dst)
+}
+
+func doReqJSONRaw(method, plexURL, plexToken, path string, pp plexParams, dst any) error {
+	resp, err := doReqRaw(method, plexURL, plexToken, path, pp)
 	if err != nil {
 		return err
 	}
@@ -458,18 +473,22 @@ func FetchSessionHistory(plexURL, plexToken string, sinceTS *int64) ([]models.Se
 	var out []models.SessionHistoryEntry
 
 	for {
-		params := map[string]string{
-			"X-Plex-Container-Start": strconv.Itoa(start),
-			"X-Plex-Container-Size":  strconv.Itoa(pageSize),
-			"sort":                   "viewedAt:asc",
+		pp := plexParams{
+			Normal: map[string]string{
+				"X-Plex-Container-Start": strconv.Itoa(start),
+				"X-Plex-Container-Size":  strconv.Itoa(pageSize),
+				"sort":                   "viewedAt:asc",
+			},
 		}
 		if sinceTS != nil {
-			params["viewedAt>="] = strconv.FormatInt(*sinceTS, 10)
+			pp.Raw = map[string]string{
+				"viewedAt>=": strconv.FormatInt(*sinceTS, 10),
+			}
 		}
 
 		var resp plexResponse
-		if err := doReqJSON(http.MethodGet, plexURL, plexToken,
-			"/status/sessions/history/all", params, &resp); err != nil {
+		if err := doReqJSONRaw(http.MethodGet, plexURL, plexToken,
+			"/status/sessions/history/all", pp, &resp); err != nil {
 			slog.Warn("Plex session history fetch failed", "start", start, "error", err)
 			break
 		}
@@ -558,8 +577,8 @@ func FetchFavoritedKeys(plexURL, plexToken string, sectionID int) (map[string]bo
 
 	var resp plexResponse
 	path := fmt.Sprintf("/library/sections/%d/all", sectionID)
-	if err := doReqJSON(http.MethodGet, plexURL, plexToken, path, map[string]string{
-		"userRating>": "0",
+	if err := doReqJSONRaw(http.MethodGet, plexURL, plexToken, path, plexParams{
+		Raw: map[string]string{"userRating>": "0"},
 	}, &resp); err != nil {
 		slog.Warn("Plex favorites fetch failed", "section", sectionID, "error", err)
 		return nil, nil
