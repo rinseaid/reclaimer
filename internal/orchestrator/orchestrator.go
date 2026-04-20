@@ -729,6 +729,14 @@ func (o *Orchestrator) syncPlexUsers(plexURL, plexToken string, protectedSet map
 		inserted++
 	}
 	slog.Info("Plex watch history synced", "inserted", inserted, "skipped_no_user", skipped, "total_entries", len(history))
+
+	// Backfill: Plex history entries that lack progress data were stored
+	// with percent_complete=0. Since presence in history means it was
+	// watched, set them to 100%.
+	res, _ := o.DB.Exec("UPDATE watch_history SET percent_complete = 100 WHERE percent_complete = 0 AND media_duration = 0")
+	if n, _ := res.RowsAffected(); n > 0 {
+		slog.Info("Backfilled watch history progress", "rows", n)
+	}
 }
 
 func (o *Orchestrator) syncJellyfinUsers(jfURL, jfKey string, protectedSet map[string]bool) {
