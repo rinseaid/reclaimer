@@ -23,6 +23,8 @@ import (
 	"github.com/rinseaid/reclaimer/internal/models"
 	"github.com/rinseaid/reclaimer/internal/orchestrator"
 	"github.com/rinseaid/reclaimer/internal/services/httpclient"
+	"github.com/rinseaid/reclaimer/internal/services/jellyfin"
+	"github.com/rinseaid/reclaimer/internal/services/plex"
 	"github.com/rinseaid/reclaimer/internal/store"
 )
 
@@ -638,19 +640,56 @@ func (s *Server) handleSearchItems(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var items []models.Item
-	err := s.DB.Select(&items,
+	// Local DB results (items already tracked in collections).
+	var dbItems []models.Item
+	s.DB.Select(&dbItems,
 		s.DB.Rebind("SELECT * FROM items WHERE title LIKE ? ORDER BY title LIMIT 50"),
 		"%"+q+"%",
 	)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
-		return
+
+	seen := map[string]bool{}
+	var results []map[string]any
+	for _, it := range dbItems {
+		seen[it.RatingKey] = true
+		results = append(results, map[string]any{
+			"rating_key": it.RatingKey,
+			"title":      it.Title,
+			"media_type": it.MediaType,
+			"collection": it.Collection,
+		})
 	}
 
-	// TODO: also search Plex libraries via API
+	// Search Plex library.
+	plexURL := s.Config.GetString("plex_url")
+	plexToken := s.Config.GetString("plex_token")
+	if plexURL != "" && plexToken != "" {
+		if plexResults, err := plex.SearchLibrary(plexURL, plexToken, q); err == nil {
+			for _, pr := range plexResults {
+				rk, _ := pr["rating_key"].(string)
+				if rk != "" && !seen[rk] {
+					seen[rk] = true
+					results = append(results, pr)
+				}
+			}
+		}
+	}
 
-	writeJSON(w, http.StatusOK, map[string]any{"results": items})
+	// Search Jellyfin library.
+	jfURL := s.Config.GetString("jellyfin_url")
+	jfKey := s.Config.GetString("jellyfin_api_key")
+	if jfURL != "" && jfKey != "" {
+		if jfResults, err := jellyfin.SearchLibrary(jfURL, jfKey, q); err == nil {
+			for _, jr := range jfResults {
+				rk, _ := jr["rating_key"].(string)
+				if rk != "" && !seen[rk] {
+					seen[rk] = true
+					results = append(results, jr)
+				}
+			}
+		}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"results": results})
 }
 
 func (s *Server) handleWatchlistMembers(w http.ResponseWriter, r *http.Request) {
