@@ -248,10 +248,9 @@
         fetch('/api/run/sync-users', { method: 'POST' })
             .then(r => r.json())
             .then(data => {
-                if (data.status === 'started') {
+                if (data.status === 'started' || data.status === 'already_running') {
                     toast('User sync started', 'success');
-                    statusEl.textContent = 'Sync running...';
-                    setTimeout(() => { statusEl.textContent = ''; }, 10000);
+                    pollSyncStatus();
                 } else {
                     toast('Unexpected response', 'error');
                 }
@@ -259,12 +258,45 @@
             .catch(err => {
                 toast('Failed to start sync: ' + err.message, 'error');
                 statusEl.textContent = '';
-            })
-            .finally(() => {
                 btn.disabled = false;
                 btn.classList.remove('opacity-50', 'cursor-not-allowed');
             });
     };
+
+    function pollSyncStatus() {
+        const btn = document.getElementById('btn-sync-users');
+        const statusEl = document.getElementById('sync-status');
+        btn.disabled = true;
+        btn.classList.add('opacity-50', 'cursor-not-allowed');
+        statusEl.textContent = 'Sync running...';
+
+        const check = () => {
+            fetch('/api/run/sync-status')
+                .then(r => r.json())
+                .then(data => {
+                    if (data.syncing) {
+                        setTimeout(check, 2000);
+                    } else {
+                        statusEl.textContent = 'Sync complete';
+                        btn.disabled = false;
+                        btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                        setTimeout(() => { statusEl.textContent = ''; }, 5000);
+                    }
+                })
+                .catch(() => {
+                    statusEl.textContent = '';
+                    btn.disabled = false;
+                    btn.classList.remove('opacity-50', 'cursor-not-allowed');
+                });
+        };
+        check();
+    }
+
+    // Check sync status on page load
+    fetch('/api/run/sync-status')
+        .then(r => r.json())
+        .then(data => { if (data.syncing) pollSyncStatus(); })
+        .catch(() => {});
 
     fetch('/api/settings')
         .then(r => {
