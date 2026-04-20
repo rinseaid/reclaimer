@@ -912,7 +912,22 @@ func (s *Server) handlePlexLibraries(w http.ResponseWriter, r *http.Request) {
 
 	var data map[string]any
 	json.NewDecoder(resp.Body).Decode(&data)
-	writeJSON(w, http.StatusOK, data)
+
+	mc, _ := data["MediaContainer"].(map[string]any)
+	dirs, _ := mc["Directory"].([]any)
+	var libs []map[string]any
+	for _, d := range dirs {
+		dir, _ := d.(map[string]any)
+		libs = append(libs, map[string]any{
+			"id":    dir["key"],
+			"title": dir["title"],
+			"type":  dir["type"],
+		})
+	}
+	if libs == nil {
+		libs = []map[string]any{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"libraries": libs})
 }
 
 func (s *Server) handlePlexCollections(w http.ResponseWriter, r *http.Request) {
@@ -942,7 +957,21 @@ func (s *Server) handlePlexCollections(w http.ResponseWriter, r *http.Request) {
 
 	var data map[string]any
 	json.NewDecoder(resp.Body).Decode(&data)
-	writeJSON(w, http.StatusOK, data)
+
+	mc, _ := data["MediaContainer"].(map[string]any)
+	dirs, _ := mc["Metadata"].([]any)
+	var colls []map[string]any
+	for _, d := range dirs {
+		dir, _ := d.(map[string]any)
+		colls = append(colls, map[string]any{
+			"title": dir["title"],
+			"key":   dir["ratingKey"],
+		})
+	}
+	if colls == nil {
+		colls = []map[string]any{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"collections": colls})
 }
 
 func (s *Server) handleJellyfinLibraries(w http.ResponseWriter, r *http.Request) {
