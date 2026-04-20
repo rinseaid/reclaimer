@@ -22,6 +22,7 @@ import (
 	"github.com/rinseaid/reclaimer/internal/database"
 	"github.com/rinseaid/reclaimer/internal/models"
 	"github.com/rinseaid/reclaimer/internal/orchestrator"
+	"github.com/rinseaid/reclaimer/internal/services/httpclient"
 	"github.com/rinseaid/reclaimer/internal/store"
 )
 
@@ -1107,7 +1108,7 @@ func (s *Server) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 	}
 	req.Header.Set("Accept", "application/json")
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := httpclient.Client()
 	resp, err := client.Do(req)
 	if err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{"success": false, "error": err.Error()})
@@ -1474,7 +1475,7 @@ func (s *Server) handleTestInstance(w http.ResponseWriter, r *http.Request) {
 	req.Header.Set("X-Api-Key", body.APIKey)
 	req.Header.Set("Accept", "application/json")
 
-	client := &http.Client{Timeout: 10 * time.Second}
+	client := httpclient.Client()
 	resp, err := client.Do(req)
 	if err != nil {
 		writeJSON(w, http.StatusOK, map[string]any{"success": false, "error": err.Error()})
