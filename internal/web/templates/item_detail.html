@@ -239,7 +239,7 @@ Promise.all([
                     <div class="aspect-[2/3] rounded-md overflow-hidden bg-zinc-800 border border-zinc-800 mb-1">
                         <img src="/api/items/${c.rating_key}/poster?size=sm" loading="lazy" decoding="async" alt=""
                              class="w-full h-full object-cover group-hover:opacity-80 transition-opacity"
-                             onerror="this.style.visibility='hidden'">
+                             onerror="if(!this.dataset.fell){this.dataset.fell='1';this.src='/api/items/${ratingKey}/poster?size=sm';}else{this.style.visibility='hidden';}">
                     </div>
                     <p class="text-sm font-medium text-zinc-300 group-hover:text-zinc-100 truncate">${c.title}</p>
                     ${c.leaf_count ? '<p class="text-xs text-zinc-500">' + c.leaf_count + ' episodes</p>' : ''}
