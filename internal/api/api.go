@@ -713,8 +713,8 @@ func (s *Server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"item":          item,
-		"all_entries":   items,
-		"rule_results":  ruleResults,
+		"entries":       items,
+		"rules":         ruleResults,
 		"debrid_cache":  debridCache,
 		"activity":      activity,
 		"watch_history": watchHistory,
