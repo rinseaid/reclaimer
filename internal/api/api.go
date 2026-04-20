@@ -1059,28 +1059,54 @@ func (s *Server) handleArrTags(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		URL    string `json:"url"`
-		APIKey string `json:"api_key"`
-		Type   string `json:"type"`
+		URL     string `json:"url"`
+		APIKey  string `json:"api_key"`
+		Service string `json:"service"`
 	}
 	if err := readJSON(r, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 		return
 	}
 
-	parsed, err := url.Parse(body.URL)
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid url"})
-		return
+	// Fall back to saved config when URL or key not provided in the request.
+	if body.URL == "" || body.APIKey == "" {
+		switch body.Service {
+		case "plex":
+			if body.URL == "" {
+				body.URL = s.Config.GetString("plex_url")
+			}
+			if body.APIKey == "" {
+				body.APIKey = s.Config.GetString("plex_token")
+			}
+		case "jellyfin":
+			if body.URL == "" {
+				body.URL = s.Config.GetString("jellyfin_url")
+			}
+			if body.APIKey == "" {
+				body.APIKey = s.Config.GetString("jellyfin_api_key")
+			}
+		case "overseerr", "jellyseerr":
+			if body.URL == "" {
+				body.URL = s.Config.GetString(body.Service + "_url")
+			}
+			if body.APIKey == "" {
+				body.APIKey = s.Config.GetString(body.Service + "_api_key")
+			}
+		case "apprise":
+			if body.URL == "" {
+				body.URL = s.Config.GetString("apprise_url")
+			}
+		}
 	}
 
-	if parsed.Scheme == "" || parsed.Host == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid url: missing scheme or host"})
+	parsed, err := url.Parse(body.URL)
+	if err != nil || parsed.Scheme == "" || parsed.Host == "" {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": "invalid or missing url"})
 		return
 	}
 
 	var testURL string
-	switch body.Type {
+	switch body.Service {
 	case "plex":
 		testURL = body.URL + "/identity"
 	case "jellyfin":
@@ -1095,7 +1121,7 @@ func (s *Server) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 
 	req, _ := http.NewRequestWithContext(r.Context(), "GET", testURL, nil)
 	if body.APIKey != "" {
-		switch body.Type {
+		switch body.Service {
 		case "plex":
 			req.Header.Set("X-Plex-Token", body.APIKey)
 		case "jellyfin":
@@ -1111,19 +1137,16 @@ func (s *Server) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 	client := httpclient.Client()
 	resp, err := client.Do(req)
 	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]any{"success": false, "error": err.Error()})
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": err.Error()})
 		return
 	}
 	defer resp.Body.Close()
 
-	var data any
-	json.NewDecoder(resp.Body).Decode(&data)
-
-	writeJSON(w, http.StatusOK, map[string]any{
-		"success":     resp.StatusCode >= 200 && resp.StatusCode < 300,
-		"status_code": resp.StatusCode,
-		"data":        data,
-	})
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "detail": "Connected successfully"})
+	} else {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": fmt.Sprintf("HTTP %d", resp.StatusCode)})
+	}
 }
 
 // ---------------------------------------------------------------------------
@@ -1478,19 +1501,16 @@ func (s *Server) handleTestInstance(w http.ResponseWriter, r *http.Request) {
 	client := httpclient.Client()
 	resp, err := client.Do(req)
 	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]any{"success": false, "error": err.Error()})
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "detail": err.Error()})
 		return
 	}
 	defer resp.Body.Close()
 
-	var data any
-	json.NewDecoder(resp.Body).Decode(&data)
-
-	writeJSON(w, http.StatusOK, map[string]any{
-		"success":     resp.StatusCode >= 200 && resp.StatusCode < 300,
-		"status_code": resp.StatusCode,
-		"data":        data,
-	})
+	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": true, "detail": "Connected successfully"})
+	} else {
+		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "detail": fmt.Sprintf("HTTP %d", resp.StatusCode)})
+	}
 }
 
 // ---------------------------------------------------------------------------
