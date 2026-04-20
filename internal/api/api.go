@@ -90,6 +90,9 @@ func (s *Server) Routes() chi.Router {
 		r.Get("/recycle-bin-status", s.handleRecycleBinStatus)
 		r.Get("/arr-tags", s.handleArrTags)
 		r.Post("/test-connection", s.handleTestConnection)
+		r.Post("/plex-auth", s.handlePlexAuth)
+		r.Get("/plex-auth/{pinId}", s.handlePlexAuthCheck)
+		r.Get("/plex-servers", s.handlePlexServers)
 	})
 
 	// Activity
@@ -1313,6 +1316,127 @@ func (s *Server) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 	} else {
 		writeJSON(w, http.StatusOK, map[string]any{"ok": false, "error": fmt.Sprintf("HTTP %d", resp.StatusCode)})
 	}
+}
+
+// ---------------------------------------------------------------------------
+// Plex OAuth
+// ---------------------------------------------------------------------------
+
+const plexClientID = "reclaimer-media-manager"
+
+func (s *Server) handlePlexAuth(w http.ResponseWriter, r *http.Request) {
+	body := strings.NewReader("strong=true")
+	req, _ := http.NewRequestWithContext(r.Context(), "POST", "https://plex.tv/api/v2/pins", body)
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-Plex-Client-Identifier", plexClientID)
+	req.Header.Set("X-Plex-Product", "Reclaimer")
+
+	resp, err := httpclient.Client().Do(req)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	var pin struct {
+		ID   int    `json:"id"`
+		Code string `json:"code"`
+	}
+	json.NewDecoder(resp.Body).Decode(&pin)
+
+	authURL := fmt.Sprintf(
+		"https://app.plex.tv/auth#?clientID=%s&code=%s&context%%5Bdevice%%5D%%5Bproduct%%5D=Reclaimer",
+		plexClientID, pin.Code,
+	)
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"pin_id":   pin.ID,
+		"code":     pin.Code,
+		"auth_url": authURL,
+	})
+}
+
+func (s *Server) handlePlexAuthCheck(w http.ResponseWriter, r *http.Request) {
+	pinID := chi.URLParam(r, "pinId")
+
+	req, _ := http.NewRequestWithContext(r.Context(), "GET",
+		fmt.Sprintf("https://plex.tv/api/v2/pins/%s", pinID), nil)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-Plex-Client-Identifier", plexClientID)
+
+	resp, err := httpclient.Client().Do(req)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	var pin struct {
+		AuthToken string `json:"authToken"`
+	}
+	json.NewDecoder(resp.Body).Decode(&pin)
+
+	if pin.AuthToken == "" {
+		writeJSON(w, http.StatusOK, map[string]any{"waiting": true})
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"waiting": false, "auth_token": pin.AuthToken})
+}
+
+func (s *Server) handlePlexServers(w http.ResponseWriter, r *http.Request) {
+	token := queryStr(r, "token", "")
+	if token == "" {
+		token = s.Config.GetString("plex_token")
+	}
+	if token == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "no token"})
+		return
+	}
+
+	req, _ := http.NewRequestWithContext(r.Context(), "GET",
+		"https://plex.tv/api/v2/resources?includeHttps=1&includeRelay=0", nil)
+	req.Header.Set("Accept", "application/json")
+	req.Header.Set("X-Plex-Client-Identifier", plexClientID)
+	req.Header.Set("X-Plex-Token", token)
+
+	resp, err := httpclient.Client().Do(req)
+	if err != nil {
+		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		return
+	}
+	defer resp.Body.Close()
+
+	var resources []struct {
+		Name     string `json:"name"`
+		Provides string `json:"provides"`
+		Owned    bool   `json:"owned"`
+		Conns    []struct {
+			URI   string `json:"uri"`
+			Local bool   `json:"local"`
+		} `json:"connections"`
+	}
+	json.NewDecoder(resp.Body).Decode(&resources)
+
+	var servers []map[string]any
+	for _, res := range resources {
+		if !strings.Contains(res.Provides, "server") {
+			continue
+		}
+		for _, c := range res.Conns {
+			servers = append(servers, map[string]any{
+				"name":  res.Name,
+				"uri":   c.URI,
+				"local": c.Local,
+				"owned": res.Owned,
+			})
+		}
+	}
+	if servers == nil {
+		servers = []map[string]any{}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"servers": servers})
 }
 
 // ---------------------------------------------------------------------------

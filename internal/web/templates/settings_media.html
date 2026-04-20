@@ -23,17 +23,29 @@
         <h3 class="text-lg font-semibold text-zinc-100">Plex</h3>
         <span class="text-sm font-normal text-zinc-400" id="status-plex"></span>
     </div>
+    <div class="mb-5 flex items-center gap-3">
+        <button type="button" id="plex-signin-btn" onclick="plexSignIn()"
+                class="rounded-md px-4 py-2 text-sm font-semibold bg-[#e5a00d] hover:bg-[#f5b82e] text-black transition-colors">Sign in with Plex</button>
+        <span id="plex-auth-status" class="text-sm"></span>
+    </div>
+    <div id="plex-server-picker" class="hidden mb-4">
+        <label class="block text-sm font-medium text-zinc-300 mb-1">Select Server</label>
+        <select id="plex-server-select" onchange="plexSelectServer(this)"
+                class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+        </select>
+        <p class="text-xs text-zinc-500 mt-1">Choose the server connection Reclaimer should use. Pick a local address if Reclaimer runs on the same network.</p>
+    </div>
     <div class="mb-4">
         <label class="block text-sm font-medium text-zinc-300 mb-1">Server URL</label>
         <input type="text" name="plex_url" placeholder="http://plex:32400"
                class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
-        <p class="text-xs text-zinc-500 mt-1">Full URL to your Plex Media Server, including port. Usually <code class="text-xs bg-zinc-800 px-1 py-0.5 rounded">http://plex:32400</code> if running in Docker on the same network.</p>
+        <p class="text-xs text-zinc-500 mt-1">Auto-filled by sign-in, or enter manually. Usually <code class="text-xs bg-zinc-800 px-1 py-0.5 rounded">http://plex:32400</code> if on the same Docker network.</p>
     </div>
     <div class="mb-4">
         <label class="block text-sm font-medium text-zinc-300 mb-1">Token</label>
         <input type="password" name="plex_token" placeholder="(unchanged)"
                class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
-        <p class="text-xs text-zinc-500 mt-1">Your Plex access token. You can find this in Plex settings under Account > Authorized Devices, or by inspecting a Plex web request. Leave empty to keep the current saved token.</p>
+        <p class="text-xs text-zinc-500 mt-1">Auto-filled by sign-in, or enter manually. Leave empty to keep the current saved token.</p>
     </div>
     <div class="mb-4">
         <label class="block text-sm font-medium text-zinc-300 mb-1">Public URL</label>
@@ -196,6 +208,74 @@
             btn.classList.remove('opacity-50', 'cursor-not-allowed');
         });
     });
+
+    // ── Plex OAuth sign-in ──
+    let plexPollTimer = null;
+
+    window.plexSignIn = function() {
+        const btn = document.getElementById('plex-signin-btn');
+        const status = document.getElementById('plex-auth-status');
+        btn.disabled = true;
+        status.innerHTML = '<span class="text-zinc-400">Creating PIN...</span>';
+
+        fetch('/api/settings/plex-auth', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) { status.innerHTML = '<span class="text-rose-400">' + data.error + '</span>'; btn.disabled = false; return; }
+                window.open(data.auth_url, 'plexAuth', 'width=800,height=700');
+                status.innerHTML = '<span class="text-zinc-400">Waiting for authorization...</span>';
+
+                plexPollTimer = setInterval(() => {
+                    fetch('/api/settings/plex-auth/' + data.pin_id)
+                        .then(r => r.json())
+                        .then(pin => {
+                            if (pin.waiting) return;
+                            clearInterval(plexPollTimer);
+                            plexPollTimer = null;
+                            document.querySelector('[name="plex_token"]').value = pin.auth_token;
+                            status.innerHTML = '<span class="text-emerald-400">Authenticated! Select a server below.</span>';
+                            btn.disabled = false;
+                            plexFetchServers(pin.auth_token);
+                        });
+                }, 2000);
+
+                setTimeout(() => {
+                    if (plexPollTimer) {
+                        clearInterval(plexPollTimer);
+                        plexPollTimer = null;
+                        btn.disabled = false;
+                        status.innerHTML = '<span class="text-rose-400">Timed out waiting for authorization.</span>';
+                    }
+                }, 300000);
+            })
+            .catch(err => {
+                btn.disabled = false;
+                status.innerHTML = '<span class="text-rose-400">Failed: ' + err.message + '</span>';
+            });
+    };
+
+    function plexFetchServers(token) {
+        fetch('/api/settings/plex-servers?token=' + encodeURIComponent(token))
+            .then(r => r.json())
+            .then(data => {
+                const servers = data.servers || [];
+                if (servers.length === 0) return;
+                const select = document.getElementById('plex-server-select');
+                select.innerHTML = '<option value="">Choose a server connection...</option>';
+                for (const s of servers) {
+                    const tag = s.local ? 'local' : 'remote';
+                    const label = s.name + ' \u2013 ' + s.uri + ' [' + tag + ']';
+                    select.innerHTML += '<option value="' + s.uri + '">' + label + '</option>';
+                }
+                document.getElementById('plex-server-picker').classList.remove('hidden');
+            });
+    }
+
+    window.plexSelectServer = function(select) {
+        if (select.value) {
+            document.querySelector('[name="plex_url"]').value = select.value;
+        }
+    };
 
     window.testConnection = function(service) {
         const statusEl = document.getElementById('status-' + service);
