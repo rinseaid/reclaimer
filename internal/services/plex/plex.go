@@ -482,7 +482,7 @@ func FetchSessionHistory(plexURL, plexToken string, sinceTS *int64) ([]models.Se
 		}
 		if sinceTS != nil {
 			pp.Raw = map[string]string{
-				"viewedAt>=": strconv.FormatInt(*sinceTS, 10),
+				"viewedAt>": strconv.FormatInt(*sinceTS, 10),
 			}
 		}
 
