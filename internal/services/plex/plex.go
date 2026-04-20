@@ -544,6 +544,14 @@ func FetchSessionHistory(plexURL, plexToken string, sinceTS *int64) ([]models.Se
 				continue
 			}
 
+			// When both fields are absent the history endpoint simply
+			// doesn't provide progress data. Treat the entry as a
+			// completed watch (presence in history implies it was viewed).
+			if !hasDuration && !hasOffset {
+				mediaDurationMS = 1
+				viewOffsetMS = 1
+			}
+
 			// Completed playback: Plex clears viewOffset on completion.
 			if viewOffsetMS == 0 && mediaDurationMS > 0 {
 				viewOffsetMS = mediaDurationMS

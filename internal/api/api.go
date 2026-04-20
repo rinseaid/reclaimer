@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"golang.org/x/sync/singleflight"
 	"github.com/rinseaid/reclaimer/internal/config"
 	"github.com/rinseaid/reclaimer/internal/database"
 	"github.com/rinseaid/reclaimer/internal/models"
@@ -1733,6 +1734,25 @@ var posterSizes = map[string][2]int{
 	"lg": {600, 900},
 }
 
+var posterFlight singleflight.Group
+
+func serveCachedPoster(w http.ResponseWriter, r *http.Request, cacheFile, rk, size string) bool {
+	info, err := os.Stat(cacheFile)
+	if err != nil {
+		return false
+	}
+	etag := fmt.Sprintf(`"%x"`, md5.Sum([]byte(fmt.Sprintf("%s-%s-%d", rk, size, info.ModTime().Unix()))))
+	if match := r.Header.Get("If-None-Match"); match == etag {
+		w.WriteHeader(http.StatusNotModified)
+		return true
+	}
+	w.Header().Set("Content-Type", "image/jpeg")
+	w.Header().Set("ETag", etag)
+	w.Header().Set("Cache-Control", "public, max-age=86400")
+	http.ServeFile(w, r, cacheFile)
+	return true
+}
+
 func (s *Server) handlePoster(w http.ResponseWriter, r *http.Request) {
 	rk := chi.URLParam(r, "ratingKey")
 	size := queryStr(r, "size", "md")
@@ -1743,19 +1763,12 @@ func (s *Server) handlePoster(w http.ResponseWriter, r *http.Request) {
 	}
 
 	cacheFile := filepath.Join(posterCacheDir, rk+"-"+size+".jpg")
-
-	if info, err := os.Stat(cacheFile); err == nil {
-		etag := fmt.Sprintf(`"%x"`, md5.Sum([]byte(fmt.Sprintf("%s-%s-%d", rk, size, info.ModTime().Unix()))))
-
-		if match := r.Header.Get("If-None-Match"); match == etag {
-			w.WriteHeader(http.StatusNotModified)
-			return
-		}
-
-		w.Header().Set("Content-Type", "image/jpeg")
-		w.Header().Set("ETag", etag)
-		w.Header().Set("Cache-Control", "public, max-age=86400")
-		http.ServeFile(w, r, cacheFile)
+	if serveCachedPoster(w, r, cacheFile, rk, size) {
+		return
+	}
+	// Fall back to legacy cache (pre-sizing, no suffix).
+	legacyFile := filepath.Join(posterCacheDir, rk+".jpg")
+	if serveCachedPoster(w, r, legacyFile, rk, "legacy") {
 		return
 	}
 
@@ -1784,35 +1797,39 @@ func (s *Server) handlePoster(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	req, _ := http.NewRequestWithContext(r.Context(), "GET", posterURL, nil)
-	resp, err := httpclient.Client().Do(req)
+	// Deduplicate concurrent fetches for the same poster+size.
+	flightKey := rk + "-" + size
+	val, err, _ := posterFlight.Do(flightKey, func() (any, error) {
+		req, _ := http.NewRequestWithContext(r.Context(), "GET", posterURL, nil)
+		resp, err := httpclient.Client().Do(req)
+		if err != nil {
+			return nil, err
+		}
+		defer resp.Body.Close()
+
+		if resp.StatusCode != http.StatusOK {
+			return nil, fmt.Errorf("upstream returned %s", resp.Status)
+		}
+
+		body, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return nil, err
+		}
+
+		os.MkdirAll(posterCacheDir, 0o755)
+		_ = os.WriteFile(cacheFile, body, 0o644)
+		return body, nil
+	})
+
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 		return
 	}
-	defer resp.Body.Close()
 
-	if resp.StatusCode != http.StatusOK {
-		writeJSON(w, resp.StatusCode, map[string]string{"error": "upstream returned " + resp.Status})
-		return
-	}
-
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to read poster"})
-		return
-	}
-
-	os.MkdirAll(posterCacheDir, 0o755)
-	_ = os.WriteFile(cacheFile, body, 0o644)
-
+	body := val.([]byte)
 	etag := fmt.Sprintf(`"%x"`, md5.Sum([]byte(fmt.Sprintf("%s-%s-%d", rk, size, time.Now().Unix()))))
-	contentType := resp.Header.Get("Content-Type")
-	if contentType == "" {
-		contentType = "image/jpeg"
-	}
 
-	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Type", "image/jpeg")
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Cache-Control", "public, max-age=86400")
 	w.Write(body)
