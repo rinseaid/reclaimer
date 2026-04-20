@@ -1238,7 +1238,7 @@ func (s *Server) handleWatchHistory(w http.ResponseWriter, r *http.Request) {
 			SELECT
 				wh.user_id,
 				u.username,
-				u.thumb as user_thumb,
+				u.thumb as thumb,
 				wh.rating_key,
 				COALESCE(wh.title, '') as title,
 				COALESCE(wh.grandparent_title, '') as grandparent_title,
@@ -1248,7 +1248,7 @@ func (s *Server) handleWatchHistory(w http.ResponseWriter, r *http.Request) {
 				COUNT(*) as total_plays,
 				SUM(wh.play_duration) as total_duration,
 				MAX(wh.watched_at) as last_watched,
-				MAX(wh.percent_complete) as max_percent
+				MAX(wh.percent_complete) as max_percent_complete
 			FROM watch_history wh
 			JOIN users u ON u.id = wh.user_id
 			%s
