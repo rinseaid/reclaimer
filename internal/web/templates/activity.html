@@ -167,13 +167,14 @@ function titleCell(a) {
     const rk = a.grandparent_rating_key || a.rating_key;
     const poster = rk
         ? '<img src="/api/items/' + esc(rk) + '/poster?size=sm" loading="lazy" decoding="async" alt="" '
-          + 'class="w-[30px] h-[45px] object-cover rounded-sm bg-zinc-800 shrink-0" '
+          + 'class="w-[40px] h-[60px] object-cover rounded bg-zinc-800 shrink-0" '
           + 'onerror="this.style.visibility=\'hidden\'">'
-        : '<span class="w-[30px] h-[45px] rounded-sm bg-zinc-800 shrink-0 inline-block"></span>';
+        : '<span class="w-[40px] h-[60px] rounded bg-zinc-800 shrink-0 inline-block"></span>';
+    const link = '<a href="/items/' + esc(rk) + '" class="text-zinc-100 hover:text-sky-400 truncate font-semibold">' + esc(name) + '</a>';
     return '<div class="flex items-center gap-2.5 min-w-0">'
         + poster
         + '<span class="min-w-0 flex-1 flex items-center gap-2 flex-wrap">'
-        + '<strong class="text-zinc-100 truncate">' + esc(name) + '</strong>'
+        + link
         + '<span class="' + pillClass + '">' + pillLabel + '</span>'
         + '</span>'
         + '</div>';
@@ -185,11 +186,10 @@ function detailCell(a) {
         const e = a.episode_number != null ? String(a.episode_number).padStart(2, '0') : '??';
         let epName = a.title || '';
         if (a.grandparent_title && epName.startsWith(a.grandparent_title)) {
-            // Match em-dash too so Plex-supplied episode titles containing a legacy
-            // "Show — Episode" separator still strip cleanly.
             epName = epName.substring(a.grandparent_title.length).replace(/^\s*[\u2014\-:]\s*/, '');
         }
-        return '<span class="text-zinc-400 text-[0.85em]">S' + s + 'E' + e + (epName ? ' - ' + esc(epName) : '') + '</span>';
+        const label = 'S' + s + 'E' + e + (epName ? ' - ' + esc(epName) : '');
+        return '<a href="/items/' + esc(a.rating_key) + '" class="text-zinc-400 hover:text-sky-400 text-[0.85em]">' + label + '</a>';
     }
     return '';
 }
@@ -294,7 +294,7 @@ function renderActivity(data) {
         html += '<div role="cell" data-col="0">'
             + '<div class="flex items-center gap-2 min-w-0">'
             + userAvatar(a)
-            + '<span class="' + BADGE_USER + ' truncate max-w-full">' + esc(a.username) + '</span>'
+            + '<a href="#" onclick="event.preventDefault(); filterByUser(\'' + esc(a.username).replace(/'/g, "\\'") + '\')" class="' + BADGE_USER + ' truncate max-w-full hover:text-sky-400 cursor-pointer">' + esc(a.username) + '</a>'
             + sourceBadge(a.source)
             + '</div></div>';
         html += '<div role="cell" data-col="1" class="min-w-0">' + titleCell(a) + '</div>';
@@ -340,6 +340,13 @@ function toggleSort(col) {
         currentSortDir = col === 'watched' ? 'desc' : 'asc';
     }
     currentPage = 1;
+    loadActivity(1);
+}
+
+function filterByUser(username) {
+    document.getElementById('filter-user').value = username;
+    currentPage = 1;
+    syncFilterStateToUrl(false);
     loadActivity(1);
 }
 
