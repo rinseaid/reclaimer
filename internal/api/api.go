@@ -466,23 +466,12 @@ func (s *Server) handleGetCollectionItems(w http.ResponseWriter, r *http.Request
 	}
 
 	results := make([]itemWithRules, 0, len(items))
-	rulesFound := 0
 	for _, item := range items {
 		rr, _ := s.Store.GetRuleResults(item.RatingKey, cfg.Name)
 		if rr == nil {
 			rr = []models.RuleResult{}
 		}
-		if len(rr) > 0 {
-			rulesFound++
-		}
 		results = append(results, itemWithRules{Item: item, RuleResults: rr})
-	}
-	if page == 1 {
-		slog.Info("collection items served",
-			"collection", cfg.Name,
-			"total", total,
-			"pageItems", len(items),
-			"itemsWithRules", rulesFound)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{

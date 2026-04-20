@@ -472,10 +472,6 @@ func FetchSessionHistory(plexURL, plexToken string, sinceTS *int64) ([]models.Se
 	start := 0
 	var out []models.SessionHistoryEntry
 
-	if sinceTS != nil {
-		slog.Info("FetchSessionHistory filter", "sinceTS", *sinceTS, "sinceTime", time.Unix(*sinceTS, 0).UTC().Format(time.RFC3339))
-	}
-
 	for {
 		pp := plexParams{
 			Normal: map[string]string{
@@ -498,19 +494,13 @@ func FetchSessionHistory(plexURL, plexToken string, sinceTS *int64) ([]models.Se
 		}
 
 		entries, _ := metadataSlice(resp.MediaContainer, "Metadata")
-		totalSize := toInt(resp.MediaContainer["totalSize"])
-		if start == 0 {
-			slog.Info("FetchSessionHistory page0", "metadataCount", len(entries), "totalSize", totalSize)
-		}
 		if len(entries) == 0 {
 			break
 		}
 
-		var skipNoAcct, skipType, skipPhantom int
 		for _, h := range entries {
 			acctID := toInt64(h["accountID"])
 			if acctID == 0 {
-				skipNoAcct++
 				continue
 			}
 
@@ -522,7 +512,6 @@ func FetchSessionHistory(plexURL, plexToken string, sinceTS *int64) ([]models.Se
 			case "movie":
 				mediaType = "movie"
 			default:
-				skipType++
 				continue
 			}
 
@@ -552,7 +541,6 @@ func FetchSessionHistory(plexURL, plexToken string, sinceTS *int64) ([]models.Se
 			_, hasDuration := h["duration"]
 			_, hasOffset := h["viewOffset"]
 			if hasDuration && hasOffset && viewOffsetMS == 0 && mediaDurationMS == 0 {
-				skipPhantom++
 				continue
 			}
 
@@ -573,12 +561,6 @@ func FetchSessionHistory(plexURL, plexToken string, sinceTS *int64) ([]models.Se
 				ViewOffsetMS:     viewOffsetMS,
 				MediaDurationMS:  mediaDurationMS,
 			})
-		}
-
-		if skipNoAcct+skipType+skipPhantom > 0 {
-			slog.Info("FetchSessionHistory skipped",
-				"noAccount", skipNoAcct, "unknownType", skipType, "phantom", skipPhantom,
-				"kept", len(entries)-skipNoAcct-skipType-skipPhantom)
 		}
 
 		if len(entries) < pageSize {
