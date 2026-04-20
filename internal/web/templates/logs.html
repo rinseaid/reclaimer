@@ -398,7 +398,7 @@ function renderAll() {
             : titleText;
         const cls = indent ? 'gtable-row run-child' : 'gtable-row';
         const indentClass = indent ? ' pl-6' : '';
-        let row = '<div class="' + cls + ' py-2.5 px-1 border-b border-zinc-700 text-sm hover:bg-white/[0.02]' + indentClass + '" role="row" data-filterable>';
+        let row = '<div class="' + cls + ' py-3 px-1 border-b border-zinc-700/60 text-sm hover:bg-white/[0.02] items-start' + indentClass + '" role="row" data-filterable>';
         row += '<div role="cell" data-col="0" class="whitespace-nowrap text-zinc-100">' + fmtTime(a.timestamp) + '</div>';
         row += '<div role="cell" data-col="1">' + eventPill(a.event_type) + '</div>';
         const ruleSlug = ruleText ? ruleText.toLowerCase().replace(/ /g, '-') : '';
