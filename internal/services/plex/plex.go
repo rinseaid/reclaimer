@@ -641,7 +641,9 @@ func ItemURI(plexURL, plexToken, ratingKey string) (string, error) {
 func FetchMetadata(plexURL, plexToken, ratingKey string, dst *map[string]any) error {
 	var resp plexResponse
 	path := fmt.Sprintf("/library/metadata/%s", ratingKey)
-	if err := doReqJSON(http.MethodGet, plexURL, plexToken, path, nil, &resp); err != nil {
+	if err := doReqJSON(http.MethodGet, plexURL, plexToken, path, map[string]string{
+		"includeGuids": "1",
+	}, &resp); err != nil {
 		return err
 	}
 	items, _ := metadataSlice(resp.MediaContainer, "Metadata")
@@ -650,6 +652,65 @@ func FetchMetadata(plexURL, plexToken, ratingKey string, dst *map[string]any) er
 	}
 	*dst = items[0]
 	return nil
+}
+
+// FetchChildren returns all children of a Plex item (seasons for shows,
+// episodes for seasons).
+func FetchChildren(plexURL, plexToken, ratingKey string) ([]map[string]any, error) {
+	var resp plexResponse
+	path := fmt.Sprintf("/library/metadata/%s/children", ratingKey)
+	if err := doReqJSON(http.MethodGet, plexURL, plexToken, path, nil, &resp); err != nil {
+		return nil, fmt.Errorf("FetchChildren %s: %w", ratingKey, err)
+	}
+	return metadataSlice(resp.MediaContainer, "Metadata")
+}
+
+// BuildBreadcrumb constructs a navigation breadcrumb from Plex metadata.
+func BuildBreadcrumb(meta map[string]any) []map[string]any {
+	var crumbs []map[string]any
+	if lib, _ := meta["librarySectionTitle"].(string); lib != "" {
+		crumbs = append(crumbs, map[string]any{"title": lib, "type": "library"})
+	}
+	itemType, _ := meta["type"].(string)
+	switch itemType {
+	case "episode":
+		if rk := toString(meta["grandparentRatingKey"]); rk != "" {
+			crumbs = append(crumbs, map[string]any{
+				"title": toString(meta["grandparentTitle"]), "type": "show", "rating_key": rk,
+			})
+		}
+		if rk := toString(meta["parentRatingKey"]); rk != "" {
+			idx := toInt(meta["parentIndex"])
+			t := fmt.Sprintf("Season %d", idx)
+			if idx == 0 {
+				t = "Specials"
+			}
+			crumbs = append(crumbs, map[string]any{
+				"title": t, "type": "season", "rating_key": rk,
+			})
+		}
+	case "season":
+		if rk := toString(meta["parentRatingKey"]); rk != "" {
+			crumbs = append(crumbs, map[string]any{
+				"title": toString(meta["parentTitle"]), "type": "show", "rating_key": rk,
+			})
+		}
+	}
+	crumbs = append(crumbs, map[string]any{
+		"title": toString(meta["title"]), "type": itemType, "rating_key": toString(meta["ratingKey"]),
+	})
+	return crumbs
+}
+
+// NormalizeChild extracts a lightweight view of a Plex child metadata entry.
+func NormalizeChild(c map[string]any) map[string]any {
+	return map[string]any{
+		"rating_key": toString(c["ratingKey"]),
+		"title":      toString(c["title"]),
+		"type":       toString(c["type"]),
+		"index":      toInt(c["index"]),
+		"leaf_count": toInt(c["leafCount"]),
+	}
 }
 
 // SearchLibrary searches across Plex library sections for movies and shows
