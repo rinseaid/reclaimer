@@ -221,7 +221,7 @@ Promise.all([
     if (overseerrUrl && tmdbId) { const st = mediaType === 'show' ? 'tv' : 'movie'; links.push(`<a href="${overseerrUrl}/${st}/${tmdbId}" target="_blank" class="${linkCls}">Seerr</a>`); }
     if (tmdbId) { const tt = mediaType === 'show' ? 'tv' : 'movie'; links.push(`<a href="https://www.themoviedb.org/${tt}/${tmdbId}" target="_blank" class="${linkCls}">TMDB</a>`); }
     if (imdbId) links.push(`<a href="https://www.imdb.com/title/${imdbId}" target="_blank" class="${linkCls}">IMDb</a>`);
-    if (tvdbId) { const vt = mediaType === 'show' ? 'series' : 'movies'; links.push(`<a href="https://thetvdb.com/${vt}/${tvdbId}" target="_blank" class="${linkCls}">TVDB</a>`); }
+    if (tvdbId) { links.push(`<a href="https://thetvdb.com/search?query=${encodeURIComponent(item.title || '')}" target="_blank" class="${linkCls}">TVDB</a>`); }
     if (links.length) html += `<div class="flex gap-2 flex-wrap mb-6">${links.join('')}</div>`;
 
     // Ratings placeholder
