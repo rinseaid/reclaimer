@@ -1012,11 +1012,12 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 	if inner, ok := updates["settings"].(map[string]any); ok {
 		updates = inner
 	}
-	if err := s.Config.Update(updates); err != nil {
+	count, err := s.Config.Update(updates)
+	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
+	writeJSON(w, http.StatusOK, map[string]any{"status": "updated", "count": count})
 }
 
 func (s *Server) handlePlexLibraries(w http.ResponseWriter, r *http.Request) {

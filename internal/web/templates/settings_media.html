@@ -187,8 +187,7 @@
             return r.json();
         })
         .then(data => {
-            const count = (data.updated || []).length;
-            toast('Settings saved (' + count + ' fields updated)', 'success');
+            toast('Settings saved (' + (data.count || 0) + ' fields updated)', 'success');
         })
         .catch(err => toast('Failed to save: ' + err.message, 'error'))
         .finally(() => {

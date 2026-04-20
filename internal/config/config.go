@@ -241,7 +241,8 @@ func (c *Config) GetAll(redact bool) map[string]any {
 	return result
 }
 
-func (c *Config) Update(updates map[string]any) error {
+func (c *Config) Update(updates map[string]any) (int, error) {
+	count := 0
 	for key, value := range updates {
 		if _, ok := defaults[key]; !ok {
 			continue
@@ -252,11 +253,12 @@ func (c *Config) Update(updates map[string]any) error {
 			key, string(jsonVal),
 		)
 		if err != nil {
-			return err
+			return count, err
 		}
+		count++
 	}
 	c.reloadCache()
-	return nil
+	return count, nil
 }
 
 func coerce(key string, value string) any {
