@@ -91,6 +91,13 @@ func main() {
 	slog.Info("scheduled nightly run", "hour", hour, "minute", minute)
 	slog.Info("scheduled periodic user sync", "hours", syncHours)
 
+	go func() {
+		slog.Info("running initial user sync on startup")
+		if err := orch.SyncUsers(); err != nil {
+			slog.Error("initial user sync failed", "error", err)
+		}
+	}()
+
 	r := chi.NewRouter()
 	r.Use(middleware.Logger)
 	r.Use(middleware.Recoverer)
