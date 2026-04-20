@@ -118,8 +118,10 @@ Promise.all([
             return;
         }
 
-        if (data.item && data.item.removed) {
+        if (data.item && (data.item.removed || data.item.not_tracked)) {
             const title = data.item.title || ratingKey;
+            const isRemoved = !!data.item.removed;
+
             let activityHtml = '';
             if (data.activity && data.activity.length) {
                 activityHtml = '<div class="mt-6"><h3 class="text-sm font-semibold text-zinc-400 uppercase tracking-wide mb-3">Activity History</h3>';
@@ -144,6 +146,27 @@ Promise.all([
                 }
                 activityHtml += '</div></div>';
             }
+
+            let watchHtml = '';
+            if (data.watch_history && data.watch_history.length) {
+                watchHtml = '<div class="mt-6"><h3 class="text-sm font-semibold text-zinc-400 uppercase tracking-wide mb-3">Watch History</h3>';
+                watchHtml += '<div class="divide-y divide-zinc-800">';
+                for (const w of data.watch_history) {
+                    watchHtml += `<div class="py-2 flex gap-4 text-sm">
+                        <span class="text-zinc-500 whitespace-nowrap">${fmtDate(w.watched_at)}</span>
+                        <span class="text-zinc-300">${w.account_name || 'Unknown'}</span>
+                    </div>`;
+                }
+                watchHtml += '</div></div>';
+            }
+
+            const badge = isRemoved
+                ? '<span class="inline-flex px-2 py-0.5 rounded-md text-xs font-semibold bg-zinc-700/40 text-zinc-400 mt-2">Removed</span>'
+                : '';
+            const message = isRemoved
+                ? 'This item was removed from its rule collection. It is no longer tracked.'
+                : 'This item is not in any Reclaimer rule collections.';
+
             target.innerHTML = `
                 <nav class="text-sm mb-2" aria-label="breadcrumb">
                     <a href="/rules" class="text-sky-500 hover:text-sky-400">Rules</a>
@@ -156,11 +179,12 @@ Promise.all([
                          onerror="this.style.visibility='hidden'">
                     <div>
                         <h2 class="text-2xl font-bold text-zinc-100">${title}</h2>
-                        <span class="inline-flex px-2 py-0.5 rounded-md text-xs font-semibold bg-zinc-700/40 text-zinc-400 mt-2">Removed</span>
-                        <p class="text-zinc-500 text-sm mt-2">This item was removed from its rule collection. It is no longer tracked.</p>
+                        ${badge}
+                        <p class="text-zinc-500 text-sm mt-2">${message}</p>
                     </div>
                 </div>
-                ${activityHtml}`;
+                ${activityHtml}
+                ${watchHtml}`;
             return;
         }
 

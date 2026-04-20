@@ -630,6 +630,22 @@ func ItemURI(plexURL, plexToken, ratingKey string) (string, error) {
 	return fmt.Sprintf("server://%s/com.plexapp.plugins.library/library/metadata/%s", mid, ratingKey), nil
 }
 
+// FetchMetadata fetches a single item's metadata by rating key and populates
+// dst with the first Metadata entry (title, type, year, etc.).
+func FetchMetadata(plexURL, plexToken, ratingKey string, dst *map[string]any) error {
+	var resp plexResponse
+	path := fmt.Sprintf("/library/metadata/%s", ratingKey)
+	if err := doReqJSON(http.MethodGet, plexURL, plexToken, path, nil, &resp); err != nil {
+		return err
+	}
+	items, _ := metadataSlice(resp.MediaContainer, "Metadata")
+	if len(items) == 0 {
+		return fmt.Errorf("no metadata for %s", ratingKey)
+	}
+	*dst = items[0]
+	return nil
+}
+
 // SearchLibrary searches across Plex library sections for movies and shows
 // matching the query string. Returns lightweight result maps with rating_key,
 // title, media_type, and source fields.
