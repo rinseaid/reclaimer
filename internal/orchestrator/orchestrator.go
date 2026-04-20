@@ -664,22 +664,31 @@ func (o *Orchestrator) syncPlexUsers(plexURL, plexToken string, protectedSet map
 	var sinceTS *int64
 	var lastWatched string
 	if err := o.DB.Get(&lastWatched, "SELECT MAX(watched_at) FROM watch_history"); err == nil && lastWatched != "" {
-		if t, err := time.Parse(time.RFC3339, lastWatched); err == nil {
-			ts := t.Unix() - 3600 // 1h overlap for safety
-			sinceTS = &ts
+		for _, layout := range []string{time.RFC3339, "2006-01-02T15:04:05", "2006-01-02 15:04:05"} {
+			if t, err := time.Parse(layout, lastWatched); err == nil {
+				ts := t.Unix() - 3600
+				sinceTS = &ts
+				break
+			}
 		}
 	}
+	slog.Info("Plex watch history sync",
+		"userMapSize", len(userIDMap),
+		"lastWatched", lastWatched,
+		"sinceTS", sinceTS)
 	history, err := plex.FetchSessionHistory(plexURL, plexToken, sinceTS)
 	if err != nil {
 		slog.Warn("Plex session history fetch failed", "error", err)
 		return
 	}
+	slog.Info("Plex session history fetched", "entries", len(history))
 
 	inserted := 0
-	batch := 0
+	skipped := 0
 	for _, h := range history {
 		internalID, ok := userIDMap[h.AccountID]
 		if !ok {
+			skipped++
 			continue
 		}
 		if h.RatingKey == "" || h.WatchedAt == "" {
@@ -718,12 +727,8 @@ func (o *Orchestrator) syncPlexUsers(plexURL, plexToken string, protectedSet map
 			continue
 		}
 		inserted++
-		batch++
-		if batch >= 500 {
-			batch = 0
-		}
 	}
-	slog.Info("Plex watch history synced", "inserted", inserted)
+	slog.Info("Plex watch history synced", "inserted", inserted, "skipped_no_user", skipped, "total_entries", len(history))
 }
 
 func (o *Orchestrator) syncJellyfinUsers(jfURL, jfKey string, protectedSet map[string]bool) {
