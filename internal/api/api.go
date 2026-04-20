@@ -707,16 +707,43 @@ func (s *Server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 		var activity []models.ActivityLog
 		s.DB.Select(&activity,
 			s.DB.Rebind("SELECT * FROM activity_log WHERE rating_key = ? ORDER BY timestamp DESC LIMIT 50"), rk)
-		if len(activity) == 0 {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "item not found"})
-			return
-		}
-		title := activity[0].Title
 		var watchHistory []models.WatchHistory
 		s.DB.Select(&watchHistory,
 			s.DB.Rebind("SELECT * FROM watch_history WHERE rating_key = ? ORDER BY watched_at DESC"), rk)
+
+		if len(activity) > 0 {
+			// Previously tracked, now removed.
+			writeJSON(w, http.StatusOK, map[string]any{
+				"item":          map[string]any{"rating_key": rk, "title": activity[0].Title, "removed": true},
+				"entries":       []any{},
+				"rules":         []any{},
+				"debrid_cache":  []any{},
+				"activity":      activity,
+				"watch_history": watchHistory,
+				"watchers":      []any{},
+				"ratings":       nil,
+			})
+			return
+		}
+
+		// Not in DB at all — try to look up title from Plex.
+		title := ""
+		mediaType := ""
+		plexURL := s.Config.GetString("plex_url")
+		plexToken := s.Config.GetString("plex_token")
+		if plexURL != "" && plexToken != "" {
+			var resp map[string]any
+			if err := plex.FetchMetadata(plexURL, plexToken, rk, &resp); err == nil {
+				title, _ = resp["title"].(string)
+				mediaType, _ = resp["type"].(string)
+			}
+		}
+		if title == "" {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "item not found"})
+			return
+		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"item":          map[string]any{"rating_key": rk, "title": title, "removed": true},
+			"item":          map[string]any{"rating_key": rk, "title": title, "media_type": mediaType, "not_tracked": true},
 			"entries":       []any{},
 			"rules":         []any{},
 			"debrid_cache":  []any{},
@@ -1700,13 +1727,25 @@ func (s *Server) handleSyncUsers(w http.ResponseWriter, r *http.Request) {
 
 const posterCacheDir = "/app/data/poster-cache"
 
+var posterSizes = map[string][2]int{
+	"sm": {80, 120},
+	"md": {240, 360},
+	"lg": {600, 900},
+}
+
 func (s *Server) handlePoster(w http.ResponseWriter, r *http.Request) {
 	rk := chi.URLParam(r, "ratingKey")
+	size := queryStr(r, "size", "md")
+	dims, ok := posterSizes[size]
+	if !ok {
+		dims = posterSizes["md"]
+		size = "md"
+	}
 
-	cacheFile := filepath.Join(posterCacheDir, rk+".jpg")
+	cacheFile := filepath.Join(posterCacheDir, rk+"-"+size+".jpg")
 
 	if info, err := os.Stat(cacheFile); err == nil {
-		etag := fmt.Sprintf(`"%x"`, md5.Sum([]byte(fmt.Sprintf("%s-%d", rk, info.ModTime().Unix()))))
+		etag := fmt.Sprintf(`"%x"`, md5.Sum([]byte(fmt.Sprintf("%s-%s-%d", rk, size, info.ModTime().Unix()))))
 
 		if match := r.Header.Get("If-None-Match"); match == etag {
 			w.WriteHeader(http.StatusNotModified)
@@ -1726,7 +1765,8 @@ func (s *Server) handlePoster(w http.ResponseWriter, r *http.Request) {
 
 	var posterURL string
 	if plexURL != "" && plexToken != "" {
-		posterURL = fmt.Sprintf("%s/library/metadata/%s/thumb?X-Plex-Token=%s", plexURL, rk, plexToken)
+		posterURL = fmt.Sprintf("%s/library/metadata/%s/thumb?X-Plex-Token=%s&width=%d&height=%d",
+			plexURL, rk, plexToken, dims[0], dims[1])
 	}
 
 	// Fallback to Jellyfin
@@ -1734,7 +1774,8 @@ func (s *Server) handlePoster(w http.ResponseWriter, r *http.Request) {
 		jfURL := s.Config.GetString("jellyfin_url")
 		jfKey := s.Config.GetString("jellyfin_api_key")
 		if jfURL != "" && jfKey != "" {
-			posterURL = fmt.Sprintf("%s/Items/%s/Images/Primary?api_key=%s", jfURL, rk, jfKey)
+			posterURL = fmt.Sprintf("%s/Items/%s/Images/Primary?api_key=%s&maxWidth=%d&maxHeight=%d",
+				jfURL, rk, jfKey, dims[0], dims[1])
 		}
 	}
 
@@ -1765,7 +1806,7 @@ func (s *Server) handlePoster(w http.ResponseWriter, r *http.Request) {
 	os.MkdirAll(posterCacheDir, 0o755)
 	_ = os.WriteFile(cacheFile, body, 0o644)
 
-	etag := fmt.Sprintf(`"%x"`, md5.Sum([]byte(fmt.Sprintf("%s-%d", rk, time.Now().Unix()))))
+	etag := fmt.Sprintf(`"%x"`, md5.Sum([]byte(fmt.Sprintf("%s-%s-%d", rk, size, time.Now().Unix()))))
 	contentType := resp.Header.Get("Content-Type")
 	if contentType == "" {
 		contentType = "image/jpeg"
