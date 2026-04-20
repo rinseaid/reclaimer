@@ -1008,6 +1008,10 @@ func (s *Server) handleUpdateSettings(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 		return
 	}
+	// Unwrap {settings: {...}} envelope sent by the frontend forms.
+	if inner, ok := updates["settings"].(map[string]any); ok {
+		updates = inner
+	}
 	if err := s.Config.Update(updates); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
 		return
@@ -1051,7 +1055,11 @@ func (s *Server) handlePlexLibraries(w http.ResponseWriter, r *http.Request) {
 	if libs == nil {
 		libs = []map[string]any{}
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"libraries": libs})
+	result := map[string]any{"libraries": libs}
+	if mid, err := plex.GetMachineID(plexURL, plexToken); err == nil {
+		result["machine_id"] = mid
+	}
+	writeJSON(w, http.StatusOK, result)
 }
 
 func (s *Server) handlePlexCollections(w http.ResponseWriter, r *http.Request) {
