@@ -472,6 +472,10 @@ func FetchSessionHistory(plexURL, plexToken string, sinceTS *int64) ([]models.Se
 	start := 0
 	var out []models.SessionHistoryEntry
 
+	if sinceTS != nil {
+		slog.Info("FetchSessionHistory filter", "sinceTS", *sinceTS, "sinceTime", time.Unix(*sinceTS, 0).UTC().Format(time.RFC3339))
+	}
+
 	for {
 		pp := plexParams{
 			Normal: map[string]string{
@@ -494,6 +498,10 @@ func FetchSessionHistory(plexURL, plexToken string, sinceTS *int64) ([]models.Se
 		}
 
 		entries, _ := metadataSlice(resp.MediaContainer, "Metadata")
+		totalSize := toInt(resp.MediaContainer["totalSize"])
+		if start == 0 {
+			slog.Info("FetchSessionHistory page0", "metadataCount", len(entries), "totalSize", totalSize)
+		}
 		if len(entries) == 0 {
 			break
 		}
