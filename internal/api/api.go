@@ -706,86 +706,62 @@ func (s *Server) handleWatchlistMembers(w http.ResponseWriter, r *http.Request) 
 func (s *Server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 	rk := chi.URLParam(r, "ratingKey")
 
-	items, err := s.Store.GetItemsByRatingKey(rk)
-	if err != nil || len(items) == 0 {
-		// Item not in items table — may have been removed. Return any
-		// activity history so the UI can still show what happened.
-		var activity []models.ActivityLog
-		s.DB.Select(&activity,
-			s.DB.Rebind("SELECT * FROM activity_log WHERE rating_key = ? ORDER BY timestamp DESC LIMIT 50"), rk)
-		var watchHistory []map[string]any
-		rows, _ := s.DB.Queryx(s.DB.Rebind(`
-			SELECT wh.*, COALESCE(u.username, '') as account_name
-			FROM watch_history wh
-			LEFT JOIN users u ON u.id = wh.user_id
-			WHERE wh.rating_key = ? ORDER BY wh.watched_at DESC`), rk)
-		if rows != nil {
-			defer rows.Close()
-			for rows.Next() {
-				row := map[string]any{}
-				if err := rows.MapScan(row); err == nil {
-					watchHistory = append(watchHistory, row)
+	plexURL := s.Config.GetString("plex_url")
+	plexToken := s.Config.GetString("plex_token")
+
+	// Always try Plex first for canonical metadata.
+	var meta map[string]any
+	if plexURL != "" && plexToken != "" {
+		_ = plex.FetchMetadata(plexURL, plexToken, rk, &meta)
+	}
+
+	var itemData map[string]any
+	var breadcrumb []map[string]any
+	var children []map[string]any
+
+	if meta != nil {
+		itemType, _ := meta["type"].(string)
+		itemData = map[string]any{
+			"rating_key": rk,
+			"title":      meta["title"],
+			"media_type": itemType,
+			"year":       meta["year"],
+			"summary":    meta["summary"],
+			"imdb_id":    plex.ExternalID(meta, "imdb"),
+			"tmdb_id":    plex.ExternalID(meta, "tmdb"),
+			"tvdb_id":    plex.ExternalID(meta, "tvdb"),
+		}
+		breadcrumb = plex.BuildBreadcrumb(meta)
+
+		if (itemType == "show" || itemType == "season") && plexURL != "" {
+			if raw, err := plex.FetchChildren(plexURL, plexToken, rk); err == nil {
+				for _, c := range raw {
+					children = append(children, plex.NormalizeChild(c))
 				}
 			}
 		}
+	}
 
-		if len(activity) > 0 {
-			// Previously tracked, now removed.
-			writeJSON(w, http.StatusOK, map[string]any{
-				"item":          map[string]any{"rating_key": rk, "title": activity[0].Title, "removed": true},
-				"entries":       []any{},
-				"rules":         []any{},
-				"debrid_cache":  []any{},
-				"activity":      activity,
-				"watch_history": watchHistory,
-				"watchers":      []any{},
-				"ratings":       nil,
-			})
-			return
-		}
+	// DB lookup for tracked items.
+	items, _ := s.Store.GetItemsByRatingKey(rk)
+	tracked := len(items) > 0
 
-		// Not in DB at all — try to look up title from Plex.
-		itemData := map[string]any{"rating_key": rk, "not_tracked": true}
-		plexURL := s.Config.GetString("plex_url")
-		plexToken := s.Config.GetString("plex_token")
-		if plexURL != "" && plexToken != "" {
-			var resp map[string]any
-			if err := plex.FetchMetadata(plexURL, plexToken, rk, &resp); err == nil {
-				itemData["title"] = resp["title"]
-				itemData["media_type"] = resp["type"]
-				if gp, ok := resp["grandparentTitle"]; ok {
-					itemData["grandparent_title"] = gp
-				}
-				if pi, ok := resp["parentIndex"]; ok {
-					itemData["season_number"] = pi
-				}
-				if idx, ok := resp["index"]; ok {
-					itemData["episode_number"] = idx
-				}
-				if yr, ok := resp["year"]; ok {
-					itemData["year"] = yr
-				}
-			}
+	// Fall back to DB data when Plex metadata is unavailable.
+	if itemData == nil && tracked {
+		it := items[0]
+		itemData = map[string]any{
+			"rating_key": rk,
+			"title":      it.Title,
+			"media_type": it.MediaType,
 		}
-		if itemData["title"] == nil {
-			writeJSON(w, http.StatusNotFound, map[string]string{"error": "item not found"})
-			return
-		}
-		writeJSON(w, http.StatusOK, map[string]any{
-			"item":          itemData,
-			"entries":       []any{},
-			"rules":         []any{},
-			"debrid_cache":  []any{},
-			"activity":      activity,
-			"watch_history": watchHistory,
-			"watchers":      []any{},
-			"ratings":       nil,
-		})
+	}
+
+	if itemData == nil {
+		writeJSON(w, http.StatusNotFound, map[string]string{"error": "item not found"})
 		return
 	}
 
-	item := items[0]
-
+	// Rule results for tracked items.
 	var ruleResults []models.RuleResult
 	for _, it := range items {
 		rr, _ := s.Store.GetRuleResults(it.RatingKey, it.Collection)
@@ -800,36 +776,67 @@ func (s *Server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 	s.DB.Select(&activity,
 		s.DB.Rebind("SELECT * FROM activity_log WHERE rating_key = ? ORDER BY timestamp DESC LIMIT 50"), rk)
 
-	var watchHistory []models.WatchHistory
-	s.DB.Select(&watchHistory,
-		s.DB.Rebind("SELECT * FROM watch_history WHERE rating_key = ? ORDER BY watched_at DESC"), rk)
+	// Watch history with usernames via JOIN.
+	var watchHistory []map[string]any
+	whRows, _ := s.DB.Queryx(s.DB.Rebind(`
+		SELECT wh.*, COALESCE(u.username, '') as username, COALESCE(u.thumb, '') as user_thumb
+		FROM watch_history wh
+		LEFT JOIN users u ON u.id = wh.user_id
+		WHERE wh.rating_key = ? ORDER BY wh.watched_at DESC`), rk)
+	if whRows != nil {
+		defer whRows.Close()
+		for whRows.Next() {
+			row := map[string]any{}
+			if err := whRows.MapScan(row); err == nil {
+				for k, v := range row {
+					if b, ok := v.([]byte); ok {
+						row[k] = string(b)
+					}
+				}
+				watchHistory = append(watchHistory, row)
+			}
+		}
+	}
 
 	type watcher struct {
-		Username string `db:"username" json:"username"`
-		Plays    int    `db:"plays" json:"plays"`
+		Username    string `db:"username" json:"username"`
+		Thumb       string `db:"thumb" json:"thumb"`
+		Plays       int    `db:"plays" json:"plays"`
+		LastWatched string `db:"last_watched" json:"last_watched"`
 	}
 	var watchers []watcher
 	s.DB.Select(&watchers, s.DB.Rebind(`
-		SELECT u.username, COUNT(wh.id) as plays
+		SELECT u.username, u.thumb, COUNT(wh.id) as plays, MAX(wh.watched_at) as last_watched
 		FROM watch_history wh
 		JOIN users u ON u.id = wh.user_id
 		WHERE wh.rating_key = ?
-		GROUP BY u.username
+		GROUP BY u.username, u.thumb
 		ORDER BY plays DESC
 	`), rk)
 
+	// Ratings: prefer DB item's imdb_id, then Plex metadata.
 	var ratings *models.RatingsCache
-	if item.ImdbID.Valid && item.ImdbID.String != "" {
+	imdbID := ""
+	if tracked && items[0].ImdbID.Valid {
+		imdbID = items[0].ImdbID.String
+	}
+	if imdbID == "" {
+		if id, ok := itemData["imdb_id"].(string); ok {
+			imdbID = id
+		}
+	}
+	if imdbID != "" {
 		var rc models.RatingsCache
-		err := s.DB.Get(&rc,
-			s.DB.Rebind("SELECT * FROM ratings_cache WHERE imdb_id = ?"), item.ImdbID.String)
-		if err == nil {
+		if err := s.DB.Get(&rc, s.DB.Rebind("SELECT * FROM ratings_cache WHERE imdb_id = ?"), imdbID); err == nil {
 			ratings = &rc
 		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"item":          item,
+		"item":          itemData,
+		"breadcrumb":    breadcrumb,
+		"children":      children,
+		"tracked":       tracked,
 		"entries":       items,
 		"rules":         ruleResults,
 		"debrid_cache":  debridCache,
