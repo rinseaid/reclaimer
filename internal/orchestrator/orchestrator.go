@@ -660,8 +660,16 @@ func (o *Orchestrator) syncPlexUsers(plexURL, plexToken string, protectedSet map
 	// Build plex_user_id -> internal users.id map.
 	userIDMap := o.buildUserIDMap()
 
-	// Fetch session history.
-	history, err := plex.FetchSessionHistory(plexURL, plexToken, nil)
+	// Fetch session history since the last known entry.
+	var sinceTS *int64
+	var lastWatched string
+	if err := o.DB.Get(&lastWatched, "SELECT MAX(watched_at) FROM watch_history"); err == nil && lastWatched != "" {
+		if t, err := time.Parse(time.RFC3339, lastWatched); err == nil {
+			ts := t.Unix() - 3600 // 1h overlap for safety
+			sinceTS = &ts
+		}
+	}
+	history, err := plex.FetchSessionHistory(plexURL, plexToken, sinceTS)
 	if err != nil {
 		slog.Warn("Plex session history fetch failed", "error", err)
 		return
