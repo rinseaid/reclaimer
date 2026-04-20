@@ -462,7 +462,7 @@ func (s *Server) handleGetCollectionItems(w http.ResponseWriter, r *http.Request
 
 	type itemWithRules struct {
 		models.Item
-		RuleResults []models.RuleResult `json:"rule_results"`
+		RuleResults []models.RuleResult `json:"rules"`
 	}
 
 	results := make([]itemWithRules, 0, len(items))
@@ -623,7 +623,7 @@ func (s *Server) handleKeepMembers(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]any{
 		"collection":      cfg.Name,
 		"keep_collection": keepColl,
-		"rating_keys":     ratingKeys,
+		"members":         ratingKeys,
 	})
 }
 
@@ -903,7 +903,7 @@ func (s *Server) handlePlexLibraries(w http.ResponseWriter, r *http.Request) {
 	req.Header.Set("X-Plex-Token", plexToken)
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpclient.Client().Do(req)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 		return
@@ -933,7 +933,7 @@ func (s *Server) handlePlexCollections(w http.ResponseWriter, r *http.Request) {
 	req.Header.Set("X-Plex-Token", plexToken)
 	req.Header.Set("Accept", "application/json")
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpclient.Client().Do(req)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 		return
@@ -956,7 +956,7 @@ func (s *Server) handleJellyfinLibraries(w http.ResponseWriter, r *http.Request)
 	req, _ := http.NewRequestWithContext(r.Context(), "GET", jfURL+"/Library/VirtualFolders", nil)
 	req.Header.Set("X-Emby-Token", jfKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpclient.Client().Do(req)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 		return
@@ -980,7 +980,7 @@ func (s *Server) handleJellyfinCollections(w http.ResponseWriter, r *http.Reques
 	req, _ := http.NewRequestWithContext(r.Context(), "GET", endpoint, nil)
 	req.Header.Set("X-Emby-Token", jfKey)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpclient.Client().Do(req)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 		return
@@ -1005,7 +1005,7 @@ func (s *Server) handleRecycleBinStatus(w http.ResponseWriter, r *http.Request) 
 			req, _ := http.NewRequestWithContext(r.Context(), "GET", endpoint, nil)
 			req.Header.Set("X-Api-Key", inst.APIKey)
 
-			resp, err := http.DefaultClient.Do(req)
+			resp, err := httpclient.Client().Do(req)
 			if err != nil {
 				results[inst.Name] = map[string]any{"error": err.Error()}
 				continue
@@ -1040,7 +1040,7 @@ func (s *Server) handleArrTags(w http.ResponseWriter, r *http.Request) {
 			req, _ := http.NewRequestWithContext(r.Context(), "GET", endpoint, nil)
 			req.Header.Set("X-Api-Key", inst.APIKey)
 
-			resp, err := http.DefaultClient.Do(req)
+			resp, err := httpclient.Client().Do(req)
 			if err != nil {
 				allTags[inst.Name] = map[string]any{"error": err.Error()}
 				continue
@@ -1115,6 +1115,10 @@ func (s *Server) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 		testURL = body.URL + "/api/v3/system/status"
 	case "overseerr", "jellyseerr":
 		testURL = body.URL + "/api/v1/status"
+	case "apprise":
+		// Apprise notify endpoints only accept POST; test the base health endpoint instead.
+		u, _ := url.Parse(body.URL)
+		testURL = u.Scheme + "://" + u.Host + "/status"
 	default:
 		testURL = body.URL
 	}
@@ -1301,7 +1305,7 @@ func (s *Server) handleWatchHistory(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"watches":     results,
+		"activity":    results,
 		"total":       total,
 		"page":        page,
 		"per_page":    perPage,
@@ -1484,13 +1488,26 @@ func (s *Server) handleDeleteInstance(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleTestInstance(w http.ResponseWriter, r *http.Request) {
 	var body struct {
-		URL    string `json:"url"`
-		APIKey string `json:"api_key"`
-		Kind   string `json:"kind"`
+		URL        string `json:"url"`
+		APIKey     string `json:"api_key"`
+		Kind       string `json:"kind"`
+		InstanceID *int64 `json:"instance_id"`
 	}
 	if err := readJSON(r, &body); err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid json"})
 		return
+	}
+
+	// Fall back to saved instance key when not provided.
+	if body.APIKey == "" && body.InstanceID != nil {
+		if inst, err := s.Store.GetArrInstance(*body.InstanceID); err == nil {
+			if body.APIKey == "" {
+				body.APIKey = inst.APIKey
+			}
+			if body.URL == "" {
+				body.URL = inst.URL
+			}
+		}
 	}
 
 	endpoint := body.URL + "/api/v3/system/status"
@@ -1635,7 +1652,7 @@ func (s *Server) handlePoster(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req, _ := http.NewRequestWithContext(r.Context(), "GET", posterURL, nil)
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := httpclient.Client().Do(req)
 	if err != nil {
 		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
 		return
