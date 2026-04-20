@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -211,40 +210,68 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	configs, _ := s.Store.ListCollectionConfigs()
+	configMap := map[string]models.CollectionConfig{}
+	for _, cfg := range configs {
+		configMap[cfg.Name] = cfg
+	}
+
 	collections := map[string]map[string]any{}
-	var totalItems int
-	var totalSize int64
+	var totalTracked int
+	var totalSizeBytes int64
 	var pendingActions int
+
+	for _, cfg := range configs {
+		var pipeline any
+		if cfg.Criteria.Valid {
+			var parsed models.CollectionCriteria
+			if json.Unmarshal([]byte(cfg.Criteria.String), &parsed) == nil {
+				pipeline = parsed.ActionPipeline
+			}
+		}
+		collections[cfg.Name] = map[string]any{
+			"staged": 0, "actioned": 0, "migrated": 0, "kept": 0, "total": 0, "total_bytes": int64(0),
+			"grace_days":      cfg.GraceDays,
+			"action_pipeline": pipeline,
+			"enabled":         cfg.Enabled,
+			"priority":        cfg.Priority,
+		}
+	}
 
 	for _, st := range stats {
 		if _, ok := collections[st.Collection]; !ok {
 			collections[st.Collection] = map[string]any{
-				"staged": 0, "actioned": 0, "migrated": 0, "kept": 0, "total": 0, "size": int64(0),
+				"staged": 0, "actioned": 0, "migrated": 0, "kept": 0, "total": 0, "total_bytes": int64(0),
 			}
 		}
 		c := collections[st.Collection]
 		c[st.Status] = st.Count
 		c["total"] = c["total"].(int) + st.Count
-		c["size"] = c["size"].(int64) + st.TotalSize
-		totalItems += st.Count
-		totalSize += st.TotalSize
+		c["total_bytes"] = c["total_bytes"].(int64) + st.TotalSize
+		totalTracked += st.Count
+		totalSizeBytes += st.TotalSize
 		if st.Status == "staged" {
 			pendingActions += st.Count
 		}
 	}
 
 	var lastRun sql.NullString
-	_ = s.DB.Get(&lastRun, `SELECT MAX(timestamp) FROM activity_log WHERE event_type = 'run_complete'`)
+	_ = s.DB.Get(&lastRun, `SELECT MAX(timestamp) FROM activity_log WHERE event_type = 'run_completed'`)
+
+	var lastRunObj any
+	if lastRun.Valid && lastRun.String != "" {
+		lastRunObj = map[string]string{"timestamp": lastRun.String}
+	}
 
 	settings := s.Config.GetAll(true)
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"collections":     collections,
-		"total_items":     totalItems,
-		"total_size":      totalSize,
-		"pending_actions": pendingActions,
-		"last_run":        lastRun.String,
-		"settings":        settings,
+		"collections":      collections,
+		"total_tracked":    totalTracked,
+		"total_size_bytes": totalSizeBytes,
+		"pending_actions":  pendingActions,
+		"last_run":         lastRunObj,
+		"settings":         settings,
 	})
 }
 
@@ -1029,35 +1056,6 @@ func (s *Server) handleArrTags(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, allTags)
 }
 
-var allowedDockerHosts = map[string]bool{
-	"plex": true, "radarr": true, "sonarr": true,
-	"overseerr": true, "jellyseerr": true, "jellyfin": true,
-	"tautulli": true, "prowlarr": true, "bazarr": true,
-	"lidarr": true, "readarr": true, "whisparr": true,
-}
-
-func isPrivateIP(host string) bool {
-	ip := net.ParseIP(host)
-	if ip == nil {
-		ips, err := net.LookupIP(host)
-		if err != nil || len(ips) == 0 {
-			return false
-		}
-		ip = ips[0]
-	}
-	privateNets := []string{
-		"10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16",
-		"127.0.0.0/8", "169.254.0.0/16", "::1/128", "fc00::/7",
-	}
-	for _, cidr := range privateNets {
-		_, network, _ := net.ParseCIDR(cidr)
-		if network.Contains(ip) {
-			return true
-		}
-	}
-	return false
-}
-
 func (s *Server) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 	var body struct {
 		URL    string `json:"url"`
@@ -1075,9 +1073,8 @@ func (s *Server) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	host := parsed.Hostname()
-	if isPrivateIP(host) && !allowedDockerHosts[host] {
-		writeJSON(w, http.StatusForbidden, map[string]string{"error": "SSRF: private IP not allowed"})
+	if parsed.Scheme == "" || parsed.Host == "" {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid url: missing scheme or host"})
 		return
 	}
 
@@ -1385,7 +1382,7 @@ func (s *Server) handleListInstances(w http.ResponseWriter, r *http.Request) {
 	for _, inst := range instances {
 		redacted = append(redacted, redactInstance(inst))
 	}
-	writeJSON(w, http.StatusOK, redacted)
+	writeJSON(w, http.StatusOK, map[string]any{"instances": redacted})
 }
 
 func (s *Server) handleGetInstance(w http.ResponseWriter, r *http.Request) {
@@ -1564,7 +1561,7 @@ func (s *Server) handleSyncUsers(w http.ResponseWriter, r *http.Request) {
 			slog.Error("user sync failed", "error", err)
 		}
 	}()
-	writeJSON(w, http.StatusAccepted, map[string]string{"status": "sync_started"})
+	writeJSON(w, http.StatusAccepted, map[string]string{"status": "started"})
 }
 
 // ---------------------------------------------------------------------------
