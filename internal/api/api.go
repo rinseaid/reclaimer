@@ -663,7 +663,29 @@ func (s *Server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 
 	items, err := s.Store.GetItemsByRatingKey(rk)
 	if err != nil || len(items) == 0 {
-		writeJSON(w, http.StatusNotFound, map[string]string{"error": "item not found"})
+		// Item not in items table — may have been removed. Return any
+		// activity history so the UI can still show what happened.
+		var activity []models.ActivityLog
+		s.DB.Select(&activity,
+			s.DB.Rebind("SELECT * FROM activity_log WHERE rating_key = ? ORDER BY timestamp DESC LIMIT 50"), rk)
+		if len(activity) == 0 {
+			writeJSON(w, http.StatusNotFound, map[string]string{"error": "item not found"})
+			return
+		}
+		title := activity[0].Title
+		var watchHistory []models.WatchHistory
+		s.DB.Select(&watchHistory,
+			s.DB.Rebind("SELECT * FROM watch_history WHERE rating_key = ? ORDER BY watched_at DESC"), rk)
+		writeJSON(w, http.StatusOK, map[string]any{
+			"item":          map[string]any{"rating_key": rk, "title": title, "removed": true},
+			"entries":       []any{},
+			"rules":         []any{},
+			"debrid_cache":  []any{},
+			"activity":      activity,
+			"watch_history": watchHistory,
+			"watchers":      []any{},
+			"ratings":       nil,
+		})
 		return
 	}
 
