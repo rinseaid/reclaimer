@@ -506,9 +506,11 @@ func FetchSessionHistory(plexURL, plexToken string, sinceTS *int64) ([]models.Se
 			break
 		}
 
+		var skipNoAcct, skipType, skipPhantom int
 		for _, h := range entries {
 			acctID := toInt64(h["accountID"])
 			if acctID == 0 {
+				skipNoAcct++
 				continue
 			}
 
@@ -520,6 +522,7 @@ func FetchSessionHistory(plexURL, plexToken string, sinceTS *int64) ([]models.Se
 			case "movie":
 				mediaType = "movie"
 			default:
+				skipType++
 				continue
 			}
 
@@ -544,6 +547,7 @@ func FetchSessionHistory(plexURL, plexToken string, sinceTS *int64) ([]models.Se
 
 			// Skip phantom entries from Apple TV / iPad clients.
 			if viewOffsetMS == 0 && mediaDurationMS == 0 {
+				skipPhantom++
 				continue
 			}
 
@@ -564,6 +568,12 @@ func FetchSessionHistory(plexURL, plexToken string, sinceTS *int64) ([]models.Se
 				ViewOffsetMS:     viewOffsetMS,
 				MediaDurationMS:  mediaDurationMS,
 			})
+		}
+
+		if skipNoAcct+skipType+skipPhantom > 0 {
+			slog.Info("FetchSessionHistory skipped",
+				"noAccount", skipNoAcct, "unknownType", skipType, "phantom", skipPhantom,
+				"kept", len(entries)-skipNoAcct-skipType-skipPhantom)
 		}
 
 		if len(entries) < pageSize {
