@@ -1,6 +1,7 @@
 package api
 
 import (
+	"context"
 	"crypto/md5"
 	"database/sql"
 	"encoding/json"
@@ -712,9 +713,21 @@ func (s *Server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 		var activity []models.ActivityLog
 		s.DB.Select(&activity,
 			s.DB.Rebind("SELECT * FROM activity_log WHERE rating_key = ? ORDER BY timestamp DESC LIMIT 50"), rk)
-		var watchHistory []models.WatchHistory
-		s.DB.Select(&watchHistory,
-			s.DB.Rebind("SELECT * FROM watch_history WHERE rating_key = ? ORDER BY watched_at DESC"), rk)
+		var watchHistory []map[string]any
+		rows, _ := s.DB.Queryx(s.DB.Rebind(`
+			SELECT wh.*, COALESCE(u.username, '') as account_name
+			FROM watch_history wh
+			LEFT JOIN users u ON u.id = wh.user_id
+			WHERE wh.rating_key = ? ORDER BY wh.watched_at DESC`), rk)
+		if rows != nil {
+			defer rows.Close()
+			for rows.Next() {
+				row := map[string]any{}
+				if err := rows.MapScan(row); err == nil {
+					watchHistory = append(watchHistory, row)
+				}
+			}
+		}
 
 		if len(activity) > 0 {
 			// Previously tracked, now removed.
@@ -1834,9 +1847,13 @@ func (s *Server) handlePoster(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Deduplicate concurrent fetches for the same poster+size.
+	// Use a background context so a single cancelled request doesn't
+	// abort the fetch for all concurrent waiters.
 	flightKey := rk + "-" + size
 	val, err, _ := posterFlight.Do(flightKey, func() (any, error) {
-		req, _ := http.NewRequestWithContext(r.Context(), "GET", posterURL, nil)
+		ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+		defer cancel()
+		req, _ := http.NewRequestWithContext(ctx, "GET", posterURL, nil)
 		resp, err := httpclient.Client().Do(req)
 		if err != nil {
 			return nil, err
