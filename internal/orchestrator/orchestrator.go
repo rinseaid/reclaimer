@@ -1625,9 +1625,27 @@ func (o *Orchestrator) processCollection(
 		}
 		// Item no longer matches criteria.
 		removed++
-		o.logActivity("item_removed", collectionName, t.RatingKey, t.Title, map[string]any{
-			"dry_run": dryRun,
-		})
+		detail := map[string]any{"dry_run": dryRun, "reason": "No longer matches rule criteria"}
+		var rr []struct {
+			RuleName string `db:"rule_name"`
+			Passed   bool   `db:"passed"`
+			Detail   string `db:"detail"`
+		}
+		o.DB.Select(&rr, o.DB.Rebind(
+			"SELECT rule_name, passed, detail FROM rule_results WHERE rating_key = ? AND collection = ?"),
+			t.RatingKey, collectionName)
+		if len(rr) > 0 {
+			var failed []string
+			for _, r := range rr {
+				if !r.Passed {
+					failed = append(failed, r.RuleName)
+				}
+			}
+			if len(failed) > 0 {
+				detail["reason"] = "Failed: " + strings.Join(failed, ", ")
+			}
+		}
+		o.logActivity("item_removed", collectionName, t.RatingKey, t.Title, detail)
 		if !dryRun {
 			o.DB.Exec(o.DB.Rebind(
 				"DELETE FROM items WHERE rating_key = ? AND collection = ? AND status = ?"),

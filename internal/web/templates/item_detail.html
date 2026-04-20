@@ -118,6 +118,52 @@ Promise.all([
             return;
         }
 
+        if (data.item && data.item.removed) {
+            const title = data.item.title || ratingKey;
+            let activityHtml = '';
+            if (data.activity && data.activity.length) {
+                activityHtml = '<div class="mt-6"><h3 class="text-sm font-semibold text-zinc-400 uppercase tracking-wide mb-3">Activity History</h3>';
+                activityHtml += '<div class="divide-y divide-zinc-800">';
+                for (const a of data.activity) {
+                    let detail = '';
+                    if (a.detail) {
+                        try {
+                            const d = typeof a.detail === 'string' ? JSON.parse(a.detail) : a.detail;
+                            const parts = [];
+                            if (d.reason) parts.push(d.reason);
+                            if (d.dry_run) parts.push('<span class="text-indigo-400 text-xs">Dry Run</span>');
+                            detail = parts.join(' · ');
+                        } catch(e) { detail = String(a.detail); }
+                    }
+                    activityHtml += `<div class="py-2 flex gap-4 text-sm">
+                        <span class="text-zinc-500 whitespace-nowrap">${fmtDate(a.timestamp)}</span>
+                        <span class="text-zinc-300">${a.event_type.replace(/_/g, ' ')}</span>
+                        ${a.collection ? '<span class="text-zinc-500">' + a.collection + '</span>' : ''}
+                        ${detail ? '<span class="text-zinc-400">' + detail + '</span>' : ''}
+                    </div>`;
+                }
+                activityHtml += '</div></div>';
+            }
+            target.innerHTML = `
+                <nav class="text-sm mb-2" aria-label="breadcrumb">
+                    <a href="/rules" class="text-sky-500 hover:text-sky-400">Rules</a>
+                    <span class="text-zinc-500 mx-1">/</span>
+                    <span class="text-zinc-400">${title}</span>
+                </nav>
+                <div class="flex items-start gap-5 mb-6">
+                    <img src="/api/items/${ratingKey}/poster?size=md" loading="lazy" decoding="async" alt=""
+                         class="shrink-0 rounded-md w-[120px] h-[180px] object-cover bg-zinc-800 border border-zinc-800"
+                         onerror="this.style.visibility='hidden'">
+                    <div>
+                        <h2 class="text-2xl font-bold text-zinc-100">${title}</h2>
+                        <span class="inline-flex px-2 py-0.5 rounded-md text-xs font-semibold bg-zinc-700/40 text-zinc-400 mt-2">Removed</span>
+                        <p class="text-zinc-500 text-sm mt-2">This item was removed from its rule collection. It is no longer tracked.</p>
+                    </div>
+                </div>
+                ${activityHtml}`;
+            return;
+        }
+
         const entry = data.entries[0] || {};
         const collection = entry.collection || '';
         const collectionSlug = collection.toLowerCase().replace(/ /g, '-');
