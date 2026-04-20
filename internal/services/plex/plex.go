@@ -545,8 +545,13 @@ func FetchSessionHistory(plexURL, plexToken string, sinceTS *int64) ([]models.Se
 			mediaDurationMS := toInt64(h["duration"])
 			viewOffsetMS := toInt64(h["viewOffset"])
 
-			// Skip phantom entries from Apple TV / iPad clients.
-			if viewOffsetMS == 0 && mediaDurationMS == 0 {
+			// Skip phantom entries: only when both fields are explicitly
+			// present in the response AND zero. The history endpoint often
+			// omits these fields entirely (they default to 0), so we check
+			// for their presence before treating zeros as a phantom signal.
+			_, hasDuration := h["duration"]
+			_, hasOffset := h["viewOffset"]
+			if hasDuration && hasOffset && viewOffsetMS == 0 && mediaDurationMS == 0 {
 				skipPhantom++
 				continue
 			}
