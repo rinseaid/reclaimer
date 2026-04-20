@@ -38,6 +38,9 @@ type Server struct {
 	runMu       sync.Mutex
 	running     bool
 	runProgress map[string]any
+
+	syncMu  sync.Mutex
+	syncing bool
 }
 
 func (s *Server) Routes() chi.Router {
@@ -115,6 +118,7 @@ func (s *Server) Routes() chi.Router {
 		r.Get("/status", s.handleRunStatus)
 		r.Get("/progress", s.handleRunProgress)
 		r.Post("/sync-users", s.handleSyncUsers)
+		r.Get("/sync-status", s.handleSyncStatus)
 	})
 
 	return r
@@ -1713,13 +1717,34 @@ func (s *Server) handleRunProgress(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSyncUsers(w http.ResponseWriter, r *http.Request) {
+	s.syncMu.Lock()
+	if s.syncing {
+		s.syncMu.Unlock()
+		writeJSON(w, http.StatusOK, map[string]string{"status": "already_running"})
+		return
+	}
+	s.syncing = true
+	s.syncMu.Unlock()
+
 	slog.Info("user sync triggered")
 	go func() {
+		defer func() {
+			s.syncMu.Lock()
+			s.syncing = false
+			s.syncMu.Unlock()
+		}()
 		if err := s.Orchestrator.SyncUsers(); err != nil {
 			slog.Error("user sync failed", "error", err)
 		}
 	}()
 	writeJSON(w, http.StatusAccepted, map[string]string{"status": "started"})
+}
+
+func (s *Server) handleSyncStatus(w http.ResponseWriter, r *http.Request) {
+	s.syncMu.Lock()
+	syncing := s.syncing
+	s.syncMu.Unlock()
+	writeJSON(w, http.StatusOK, map[string]any{"syncing": syncing})
 }
 
 // ---------------------------------------------------------------------------
