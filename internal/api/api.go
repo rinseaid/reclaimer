@@ -1613,11 +1613,13 @@ func (s *Server) handleRunStatus(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleRunProgress(w http.ResponseWriter, r *http.Request) {
 	s.runMu.Lock()
+	running := s.running
 	progress := s.runProgress
 	s.runMu.Unlock()
 	if progress == nil {
 		progress = map[string]any{"status": "idle"}
 	}
+	progress["running"] = running
 	writeJSON(w, http.StatusOK, progress)
 }
 
