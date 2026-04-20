@@ -124,18 +124,18 @@ function esc(str) {
 
 // Shared badge palette (matches logs.html / collections_list.html).
 const BADGE_BASE = 'inline-flex px-2 py-0.5 rounded-md text-xs font-semibold whitespace-nowrap';
-const BADGE_USER = BADGE_BASE + ' bg-indigo-500/15 text-indigo-300';
-const BADGE_SHOW = BADGE_BASE + ' bg-sky-500/15 text-sky-400';
-const BADGE_MOVIE = BADGE_BASE + ' bg-amber-500/15 text-amber-400';
-const BADGE_PLEX = BADGE_BASE + ' bg-amber-500/15 text-amber-400';
-const BADGE_JELLYFIN = BADGE_BASE + ' bg-emerald-500/15 text-emerald-400';
+const BADGE_USER = BADGE_BASE + ' bg-indigo-100 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300';
+const BADGE_SHOW = BADGE_BASE + ' bg-sky-100 text-sky-700 dark:bg-sky-500/15 dark:text-sky-400';
+const BADGE_MOVIE = BADGE_BASE + ' bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400';
+const BADGE_PLEX = BADGE_BASE + ' bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-400';
+const BADGE_JELLYFIN = BADGE_BASE + ' bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-400';
 
 function userAvatar(item) {
     if (item.thumb) {
-        return '<img src="' + esc(item.thumb) + '" alt="" loading="lazy" class="w-6 h-6 rounded-full object-cover shrink-0">';
+        return '<img src="' + esc(item.thumb) + '" alt="" loading="lazy" class="w-6 h-6 rounded-full object-cover shrink-0 ring-1 ring-zinc-300 dark:ring-zinc-600">';
     }
     const initials = (item.username || '?').substring(0, 2).toUpperCase();
-    return '<span class="w-6 h-6 rounded-full bg-zinc-700 flex items-center justify-center text-[0.65rem] font-semibold text-zinc-300 shrink-0">' + esc(initials) + '</span>';
+    return '<span class="w-6 h-6 rounded-full bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center text-[0.65rem] font-semibold text-zinc-600 dark:text-zinc-300 shrink-0">' + esc(initials) + '</span>';
 }
 
 function sourceBadge(source) {

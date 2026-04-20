@@ -732,23 +732,34 @@ func (s *Server) handleGetItem(w http.ResponseWriter, r *http.Request) {
 		}
 
 		// Not in DB at all — try to look up title from Plex.
-		title := ""
-		mediaType := ""
+		itemData := map[string]any{"rating_key": rk, "not_tracked": true}
 		plexURL := s.Config.GetString("plex_url")
 		plexToken := s.Config.GetString("plex_token")
 		if plexURL != "" && plexToken != "" {
 			var resp map[string]any
 			if err := plex.FetchMetadata(plexURL, plexToken, rk, &resp); err == nil {
-				title, _ = resp["title"].(string)
-				mediaType, _ = resp["type"].(string)
+				itemData["title"] = resp["title"]
+				itemData["media_type"] = resp["type"]
+				if gp, ok := resp["grandparentTitle"]; ok {
+					itemData["grandparent_title"] = gp
+				}
+				if pi, ok := resp["parentIndex"]; ok {
+					itemData["season_number"] = pi
+				}
+				if idx, ok := resp["index"]; ok {
+					itemData["episode_number"] = idx
+				}
+				if yr, ok := resp["year"]; ok {
+					itemData["year"] = yr
+				}
 			}
 		}
-		if title == "" {
+		if itemData["title"] == nil {
 			writeJSON(w, http.StatusNotFound, map[string]string{"error": "item not found"})
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]any{
-			"item":          map[string]any{"rating_key": rk, "title": title, "media_type": mediaType, "not_tracked": true},
+			"item":          itemData,
 			"entries":       []any{},
 			"rules":         []any{},
 			"debrid_cache":  []any{},
