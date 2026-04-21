@@ -596,11 +596,6 @@ function renderSettings(cfg, rules, behavior, protectedUsers, protectedTags, pro
       </label>
     </div>
 
-    <!-- "What this rule will do" summary card. Updated live from form state by updateSummaryCard(). -->
-    <div id="rule-summary" class="mb-5 px-4 py-3 rounded-lg bg-indigo-500/5 border border-indigo-500/20 text-sm text-zinc-300 leading-relaxed">
-      <span id="rule-summary-text" class="text-zinc-500 text-xs">Computing summary...</span>
-    </div>
-
     <!-- Library selector -->
     <div class="flex items-center gap-3 flex-wrap mb-4">
       <select id="cfg-library" onchange="handleLibraryChange()"
@@ -1396,67 +1391,7 @@ function updateCronPreview(input) {
   input.classList.remove('border-rose-500');
 }
 
-function updateSummaryCard() {
-  const target = document.getElementById('rule-summary-text');
-  const wrap = document.getElementById('rule-summary');
-  if (!target || !wrap) return;
-
-  const criteria    = describeCriteria();
-  const protections = describeProtections();
-  const actions     = describeActions();
-  const schedule    = describeSchedule();
-  const graceDays   = _cfgNum('cfg-grace-days', 30);
-
-  // Schedule/priority is appended as a standalone clause at the end,
-  // so it can be composed with the "empty criteria" short form too.
-  const scheduleStr = schedule.length > 0 ? ' ' + capitaliseFirst(joinList(schedule)) + '.' : '';
-
-  // Special-case notes first.
-  if (criteria.length === 0) {
-    target.className = 'text-sm';
-    target.innerHTML =
-      '<span class="text-zinc-500 text-xs uppercase tracking-wide font-semibold mr-2">Summary</span>' +
-      '<span class="text-amber-400">No enabled criteria</span>' +
-      '<span class="text-zinc-300"> - nothing will match.' + scheduleStr + '</span>';
-    wrap.className = 'mb-5 px-4 py-3 rounded-lg bg-amber-500/5 border border-amber-500/20 text-sm text-zinc-300 leading-relaxed';
-    return;
-  }
-  // Reset to the default indigo wrap class.
-  wrap.className = 'mb-5 px-4 py-3 rounded-lg bg-indigo-500/5 border border-indigo-500/20 text-sm text-zinc-300 leading-relaxed';
-
-  const criteriaStr    = 'flags items that are ' + joinList(criteria);
-  const protectionsStr = protections.length > 0
-      ? ', protects ' + joinList(protections)
-      : '';
-
-  let actionStr;
-  if (actions.length === 0) {
-    actionStr = ', and only tracks them (no actions configured).';
-  } else {
-    // Figure out if any post-grace action exists to decide wording.
-    // Keep in sync with DEFAULT_IMMEDIATE_TYPES and LOCKED_AFTER_GRACE_TYPES
-    // in renderPipeline(). downgrade_quality is locked after_grace, so
-    // it always counts toward hasPostGrace regardless of step.timing.
-    const IMMEDIATE = new Set(['sync_collection', 'add_arr_tag', 'remove_arr_tag']);
-    const LOCKED_AFTER_GRACE = new Set([
-      'downgrade_quality', 'swap_quality_profile',
-      'set_root_folder', 'migrate_to_instance',
-    ]);
-    const hasPostGrace = pipelineSteps.some(s => {
-      if (LOCKED_AFTER_GRACE.has(s.type)) return true;
-      const timing = s.timing || (IMMEDIATE.has(s.type) ? 'immediate' : 'after_grace');
-      return timing === 'after_grace';
-    });
-    const allImmediate = !hasPostGrace;
-    const suffix = allImmediate ? ' on every scan' : ' after ' + graceDays + ' days';
-    actionStr = ', and then ' + joinList(actions) + suffix + '.';
-  }
-
-  target.className = 'text-sm';
-  target.innerHTML =
-    '<span class="text-zinc-500 text-xs uppercase tracking-wide font-semibold mr-2">Summary</span>' +
-    '<span class="text-zinc-300">This rule ' + criteriaStr + protectionsStr + actionStr + scheduleStr + '</span>';
-}
+function updateSummaryCard() {}
 
 function capitaliseFirst(s) {
   if (!s) return '';
