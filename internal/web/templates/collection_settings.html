@@ -164,8 +164,8 @@ function daysPickerHtml(id, currentValue, prefix) {
         (prefix ? prefix + ' ' : '') +
         '<select id="' + id + '-preset" onchange="onDaysPresetChange(\'' + id + '\')" class="' + selClass + '">' + opts + '</select>' +
         '<span id="' + id + '-custom" class="flex items-center gap-1' + (isPreset ? ' hidden' : '') + '">' +
-        '<input type="number" id="' + id + '" value="' + val + '" min="' + (prefix === 'last' ? 1 : 0) + '" max="99999" class="' + numClass + '" oninput="updateDaysHint(this)">' +
-        ' days <span class="days-hint text-zinc-500">(' + humanDays(val) + ')</span>' +
+        '<input type="number" id="' + id + '" value="' + val + '" min="' + (prefix === 'last' ? 1 : 0) + '" max="99999" class="' + numClass + '">' +
+        ' days' +
         '</span></span>';
 }
 
