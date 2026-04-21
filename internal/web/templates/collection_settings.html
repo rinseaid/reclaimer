@@ -642,7 +642,7 @@ function renderSettings(cfg, rules, behavior, protectedUsers, protectedTags, pro
           ${cardHtml('show-ended', 'Show has ended', 'Series cancelled or finished', c.show_ended.enabled, null)}
         </div>
 
-        ${cardHtml('low-rating', 'Rating', 'Flag items whose audience or critic rating falls below your threshold. Companion to the Rating protection on the Protections tab.', (c.low_rating || {}).enabled || false, null)}
+        ${cardHtml('low-rating', 'Rating', 'Flag items whose audience or critic rating falls below your threshold.', (c.low_rating || {}).enabled || false, null)}
         <div id="low-rating-options" class="ml-14 mb-4 ${(c.low_rating || {}).enabled ? '' : 'hidden'}">
           <div class="flex gap-4 flex-wrap items-end">
             <label class="text-xs text-zinc-400">
@@ -711,7 +711,7 @@ function renderSettings(cfg, rules, behavior, protectedUsers, protectedTags, pro
           </label>
         </div>
 
-        ${cardHtml('old-content', 'Library age', 'Flag items that were added to the library this long ago. Companion to the Library age protection on the Protections tab.', nc.old_content_enabled,
+        ${cardHtml('old-content', 'Library age', 'Flag items that were added to the library this long ago.', nc.old_content_enabled,
           `<label class="flex items-center gap-2 text-xs text-zinc-300 whitespace-nowrap">after
             <input type="number" id="old-content-days" value="${nc.old_content_days}" min="1" max="99999"
                    class="w-20 bg-zinc-900 border border-zinc-700 rounded-md px-2 py-1 text-sm text-zinc-100 focus:border-indigo-500 focus:outline-none"
@@ -755,7 +755,7 @@ function renderSettings(cfg, rules, behavior, protectedUsers, protectedTags, pro
       `)}
 
       ${sectionHtml('protect-metadata', 'Metadata', `
-        ${cardHtml('highly-rated', 'Rating', 'Keep items whose audience or critic rating meets your threshold. Companion to the Rating criterion on the Removal Criteria tab.', (c.highly_rated || {}).enabled || false, null)}
+        ${cardHtml('highly-rated', 'Rating', 'Keep items whose audience or critic rating meets your threshold.', (c.highly_rated || {}).enabled || false, null)}
         <div id="highly-rated-options" class="ml-14 mb-4 ${(c.highly_rated || {}).enabled ? '' : 'hidden'}">
           <div class="flex gap-4 flex-wrap items-end">
             <label class="text-xs text-zinc-400">
@@ -782,7 +782,7 @@ function renderSettings(cfg, rules, behavior, protectedUsers, protectedTags, pro
           </details>
         </div>
 
-        ${cardHtml('recently-added', 'Library age', 'Keep items added to the library in the last N days. Companion to the Library age criterion on the Removal Criteria tab.', (c.recently_added || {}).enabled || false,
+        ${cardHtml('recently-added', 'Library age', 'Keep items added to the library in the last N days.', (c.recently_added || {}).enabled || false,
           `<label class="flex items-center gap-2 text-xs text-zinc-300 whitespace-nowrap">last
             <input type="number" id="recently-added-days" value="${(c.recently_added || {}).days ?? 14}" min="1" max="9999"
                    class="w-16 bg-zinc-900 border border-zinc-700 rounded-md px-2 py-1 text-sm text-zinc-100 focus:border-indigo-500 focus:outline-none"
@@ -792,7 +792,7 @@ function renderSettings(cfg, rules, behavior, protectedUsers, protectedTags, pro
         )}
       `)}
 
-      ${sectionHtml('protect-lists', 'Allowlists', `
+      ${sectionHtml('protect-lists', 'Keep lists', `
         <div class="mb-4">
           <div class="font-semibold text-sm text-zinc-100">Protected users</div>
           <div class="text-zinc-500 text-xs mt-0.5">Content requested or watched by these users is always kept</div>
@@ -1003,20 +1003,20 @@ const CRITERIA_TOOLTIPS = {
   // never_watched has no dedicated card - it is derived from Plex viewCount
   // / Jellyfin UserData.Played + our local watch history.
   'not-watched-recently': "Last play was longer ago than the threshold. Items that have never been played are flagged once they've been in the library longer than the threshold.",
-  'low-rating':           "Flag items whose audience or critic rating falls below your threshold. Companion to the Rating protection on the Protections tab - together they let a rule flag bad ratings and keep good ones.",
+  'low-rating':           "Flag items whose audience or critic rating falls below your threshold.",
   'file-size-min':        "Flag items whose primary video file is at least this large. Useful for reclaiming storage. Size is taken from the source file, not from the transcode cache.",
   'release-year-before':  "Item was released before this year. Uses the release year from Plex/Jellyfin metadata.",
   'watch-ratio-low':      "Every play of this item stopped before reaching this completion percentage. Good for spotting things nobody could finish.",
-  'old-content':          "Flag items added to the library longer ago than the threshold, regardless of watch status. Companion to the Library age protection on the Protections tab.",
+  'old-content':          "Flag items added to the library longer ago than the threshold, regardless of watch status.",
   'old-season':           "Season is older than the last N seasons of its show. Keeps recent seasons, targets the back catalogue. TV rules with season granularity only.",
   'show-ended':           "Sonarr reports the series as Ended, Cancelled, or Deleted. Does not fire for shows Sonarr still considers Continuing.",
   // Protection cards
   'active-request':       "Protect if the item has an active Seerr request from someone who hasn't watched it yet. Once the requester watches it, the protection lifts automatically.",
-  'recently-added':       "Keep items added in the last N days so fresh additions don't get nuked before anyone has a chance to watch them. Companion to the Library age criterion on the Removal Criteria tab.",
+  'recently-added':       "Keep items added in the last N days so fresh additions don't get nuked before anyone has a chance to watch them.",
   'partially-watched':    "Keep items someone started watching but didn't finish within the last N days. Uses Plex viewOffset and play history.",
   'on-watchlist':         "Protect items on any user's Plex watchlist (fetched via Overseerr).",
   'plex-favorited':       "Protect items you've hearted in Plex (rating = 10 on the user object).",
-  'highly-rated':         "Keep items whose audience or critic rating meets your threshold. Companion to the Rating criterion on the Removal Criteria tab.",
+  'highly-rated':         "Keep items whose audience or critic rating meets your threshold.",
   'series-protection':    "Protect all seasons of a show if any of the protections above apply to the show itself. TV rules with season granularity only.",
 };
 const SECTION_TOOLTIPS = {
