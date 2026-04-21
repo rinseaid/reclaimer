@@ -6,12 +6,16 @@
 package orchestrator
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
 	"log/slog"
+	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -391,6 +395,9 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 		MovieRequesters:          make(map[int]string),
 		DebridCached:             make(map[string]bool),
 	}
+
+	// Pre-warm poster cache in the background so list views load instantly.
+	go o.prewarmPosters(plexMovies, plexTV, plex_url, plex_token, jfURL, jfKey)
 
 	// ---------------------------------------------------------------
 	// Phase 2: Collection Processing
@@ -2765,4 +2772,85 @@ func toStringSlice(v any) []string {
 		return out
 	}
 	return nil
+}
+
+// ---------------------------------------------------------------------------
+// Poster pre-warming
+// ---------------------------------------------------------------------------
+
+const posterCacheDir = "/app/data/poster-cache"
+
+func (o *Orchestrator) prewarmPosters(plexMovies, plexTV []map[string]any, plexURL, plexToken, jfURL, jfKey string) {
+	var rks []string
+	for _, it := range plexMovies {
+		if rk := toString(it["ratingKey"]); rk != "" {
+			rks = append(rks, rk)
+		}
+	}
+	for _, it := range plexTV {
+		if rk := toString(it["ratingKey"]); rk != "" {
+			rks = append(rks, rk)
+		}
+	}
+	if len(rks) == 0 {
+		return
+	}
+
+	var missing []string
+	for _, rk := range rks {
+		f := filepath.Join(posterCacheDir, rk+"-sm.jpg")
+		if _, err := os.Stat(f); err != nil {
+			missing = append(missing, rk)
+		}
+	}
+	if len(missing) == 0 {
+		slog.Info("Poster pre-warm: all cached", "total", len(rks))
+		return
+	}
+
+	slog.Info("Poster pre-warm: starting", "missing", len(missing), "total", len(rks))
+	os.MkdirAll(posterCacheDir, 0o755)
+
+	sem := make(chan struct{}, 8)
+	var wg sync.WaitGroup
+	fetched := atomic.Int32{}
+
+	for _, rk := range missing {
+		wg.Add(1)
+		go func(rk string) {
+			defer wg.Done()
+			sem <- struct{}{}
+			defer func() { <-sem }()
+
+			var posterURL string
+			if plexURL != "" && plexToken != "" {
+				posterURL = fmt.Sprintf("%s/library/metadata/%s/thumb?X-Plex-Token=%s&width=80&height=120", plexURL, rk, plexToken)
+			} else if jfURL != "" && jfKey != "" {
+				posterURL = fmt.Sprintf("%s/Items/%s/Images/Primary?api_key=%s&maxWidth=80&maxHeight=120", jfURL, rk, jfKey)
+			}
+			if posterURL == "" {
+				return
+			}
+
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			req, _ := http.NewRequestWithContext(ctx, "GET", posterURL, nil)
+			resp, err := httpclient.Client().Do(req)
+			if err != nil {
+				return
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != 200 {
+				return
+			}
+			body, err := io.ReadAll(resp.Body)
+			if err != nil || len(body) == 0 {
+				return
+			}
+			_ = os.WriteFile(filepath.Join(posterCacheDir, rk+"-sm.jpg"), body, 0o644)
+			fetched.Add(1)
+		}(rk)
+	}
+	wg.Wait()
+	slog.Info("Poster pre-warm: done", "fetched", fetched.Load(), "missing", len(missing))
 }
