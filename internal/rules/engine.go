@@ -446,7 +446,7 @@ func EvaluateMovie(item map[string]any, ctx *EvaluationContext, criteria *models
 	if criteria.IsRuleEnabled("on_watchlist") {
 		if ctx.WatchlistKeys[rk] {
 			results = append(results, Result{"on_watchlist", false,
-				"On a Seerr watchlist", "blocking"})
+				"On a Plex watchlist", "blocking"})
 		} else {
 			results = append(results, Result{"on_watchlist", true,
 				"Not on any watchlist", "info"})
@@ -923,7 +923,7 @@ func EvaluateShow(item map[string]any, ctx *EvaluationContext, criteria *models.
 	if criteria.IsRuleEnabled("on_watchlist") {
 		if ctx.WatchlistKeys[rk] {
 			results = append(results, Result{"on_watchlist", false,
-				"On a Seerr watchlist", "blocking"})
+				"On a Plex watchlist", "blocking"})
 		} else {
 			results = append(results, Result{"on_watchlist", true,
 				"Not on any watchlist", "info"})
@@ -1312,10 +1312,10 @@ func EvaluateSeason(item map[string]any, ctx *EvaluationContext, criteria *model
 	if criteria.IsRuleEnabled("on_watchlist") {
 		if showRK != "" && ctx.WatchlistKeys[showRK] {
 			results = append(results, Result{"on_watchlist", false,
-				"Parent show on a Seerr watchlist", "blocking"})
+				"Parent show on a Plex watchlist", "blocking"})
 		} else if ctx.WatchlistKeys[rk] {
 			results = append(results, Result{"on_watchlist", false,
-				"On a Seerr watchlist", "blocking"})
+				"On a Plex watchlist", "blocking"})
 		} else {
 			results = append(results, Result{"on_watchlist", true,
 				"Not on any watchlist", "info"})

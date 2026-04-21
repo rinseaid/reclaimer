@@ -194,7 +194,6 @@ Protections are checked in parallel with criteria. Any match pulls an item out o
 | `protected_tags` | Item has any tag in the listed set on its library manager |
 | `protected_collections` | Item is a member of a named collection on the library server |
 | `protected_users` | Watched by one of the listed users |
-| `watchlist_protected_users` | On one of the listed users' watchlists in the request tracker |
 | `active_request` | Has an open request in the request tracker |
 | `recently_added` | Arrived in the library within the last N days |
 | `partially_watched` | Someone started it within the last N days (protects mid-watch items) |
