@@ -140,6 +140,49 @@ function updateDaysHint(input) {
     if (hint) hint.textContent = '(' + humanDays(input.value) + ')';
 }
 
+const DAY_PRESETS = [
+    { value: 7, label: '1 week' },
+    { value: 14, label: '2 weeks' },
+    { value: 30, label: '1 month' },
+    { value: 60, label: '2 months' },
+    { value: 90, label: '3 months' },
+    { value: 180, label: '6 months' },
+    { value: 365, label: '1 year' },
+    { value: 730, label: '2 years' },
+];
+
+function daysPickerHtml(id, currentValue, prefix) {
+    const val = parseInt(currentValue) || 0;
+    const isPreset = DAY_PRESETS.some(p => p.value === val);
+    const selClass = 'bg-zinc-900 border border-zinc-700 rounded-md px-2 py-1 text-sm text-zinc-100 focus:border-indigo-500 focus:outline-none';
+    const numClass = 'w-20 bg-zinc-900 border border-zinc-700 rounded-md px-2 py-1 text-sm text-zinc-100 focus:border-indigo-500 focus:outline-none';
+    let opts = DAY_PRESETS.map(p =>
+        '<option value="' + p.value + '"' + (isPreset && p.value === val ? ' selected' : '') + '>' + p.label + '</option>'
+    ).join('');
+    opts += '<option value="custom"' + (!isPreset && val > 0 ? ' selected' : '') + '>Custom\u2026</option>';
+    return '<span class="flex items-center gap-2 text-xs text-zinc-300 whitespace-nowrap">' +
+        (prefix ? prefix + ' ' : '') +
+        '<select id="' + id + '-preset" onchange="onDaysPresetChange(\'' + id + '\')" class="' + selClass + '">' + opts + '</select>' +
+        '<span id="' + id + '-custom" class="flex items-center gap-1' + (isPreset ? ' hidden' : '') + '">' +
+        '<input type="number" id="' + id + '" value="' + val + '" min="' + (prefix === 'last' ? 1 : 0) + '" max="99999" class="' + numClass + '" oninput="updateDaysHint(this)">' +
+        ' days <span class="days-hint text-zinc-500">(' + humanDays(val) + ')</span>' +
+        '</span></span>';
+}
+
+function onDaysPresetChange(id) {
+    const sel = document.getElementById(id + '-preset');
+    const customWrap = document.getElementById(id + '-custom');
+    const numInput = document.getElementById(id);
+    if (sel.value === 'custom') {
+        customWrap.classList.remove('hidden');
+        numInput.focus();
+    } else {
+        customWrap.classList.add('hidden');
+        numInput.value = sel.value;
+    }
+    if (typeof updateSummaryCard === 'function') updateSummaryCard();
+}
+
 // The switch span is wrapped in a <label> that natively forwards clicks to the
 // hidden checkbox, which already flips the checkbox state and fires 'change'.
 // We just mirror the final checkbox state into the switch's visual class --
@@ -630,12 +673,7 @@ function renderSettings(cfg, rules, behavior, protectedUsers, protectedTags, pro
 
       ${sectionHtml('criteria-common', 'Common', `
         ${cardHtml('not-watched-recently', 'Not watched recently', "Content that hasn't been played within this time window", nc.not_watched_recently_enabled,
-          `<label class="flex items-center gap-2 text-xs text-zinc-300 whitespace-nowrap">after
-            <input type="number" id="not-watched-recently-days" value="${nc.not_watched_recently_days}" min="1" max="9999"
-                   class="w-16 bg-zinc-900 border border-zinc-700 rounded-md px-2 py-1 text-sm text-zinc-100 focus:border-indigo-500 focus:outline-none"
-                   oninput="updateDaysHint(this)"> days
-            <span class="days-hint text-zinc-500">(${humanDays(nc.not_watched_recently_days)})</span>
-          </label>`
+          daysPickerHtml('not-watched-recently-days', nc.not_watched_recently_days, 'after')
         )}
 
         <div id="criteria-show-ended-wrapper" class="${isShow ? '' : 'hidden'}">
@@ -712,12 +750,7 @@ function renderSettings(cfg, rules, behavior, protectedUsers, protectedTags, pro
         </div>
 
         ${cardHtml('old-content', 'Library age', 'Flag items that were added to the library this long ago.', nc.old_content_enabled,
-          `<label class="flex items-center gap-2 text-xs text-zinc-300 whitespace-nowrap">after
-            <input type="number" id="old-content-days" value="${nc.old_content_days}" min="1" max="99999"
-                   class="w-20 bg-zinc-900 border border-zinc-700 rounded-md px-2 py-1 text-sm text-zinc-100 focus:border-indigo-500 focus:outline-none"
-                   oninput="updateDaysHint(this)"> days
-            <span class="days-hint text-zinc-500">(${humanDays(nc.old_content_days)})</span>
-          </label>`
+          daysPickerHtml('old-content-days', nc.old_content_days, 'after')
         )}
 
         <div id="old-season-wrapper" class="${isShow && granularity === 'season' ? '' : 'hidden'}">
@@ -745,12 +778,7 @@ function renderSettings(cfg, rules, behavior, protectedUsers, protectedTags, pro
         ${cardHtml('plex-favorited', 'Favorited in Plex', "Protect items you've hearted in Plex.", (c.plex_favorited || {}).enabled || false, null)}
 
         ${cardHtml('partially-watched', 'Recently watched', "Protect items someone started watching but hasn't finished within the last N days.", (c.partially_watched || {}).enabled || false,
-          `<label class="flex items-center gap-2 text-xs text-zinc-300 whitespace-nowrap">last
-            <input type="number" id="partially-watched-days" value="${(c.partially_watched || {}).days ?? 30}" min="1" max="9999"
-                   class="w-16 bg-zinc-900 border border-zinc-700 rounded-md px-2 py-1 text-sm text-zinc-100 focus:border-indigo-500 focus:outline-none"
-                   oninput="updateDaysHint(this)"> days
-            <span class="days-hint text-zinc-500">(${humanDays((c.partially_watched || {}).days ?? 30)})</span>
-          </label>`
+          daysPickerHtml('partially-watched-days', (c.partially_watched || {}).days ?? 30, 'last')
         )}
       `)}
 
@@ -783,12 +811,7 @@ function renderSettings(cfg, rules, behavior, protectedUsers, protectedTags, pro
         </div>
 
         ${cardHtml('recently-added', 'Library age', 'Keep items added to the library in the last N days.', (c.recently_added || {}).enabled || false,
-          `<label class="flex items-center gap-2 text-xs text-zinc-300 whitespace-nowrap">last
-            <input type="number" id="recently-added-days" value="${(c.recently_added || {}).days ?? 14}" min="1" max="9999"
-                   class="w-16 bg-zinc-900 border border-zinc-700 rounded-md px-2 py-1 text-sm text-zinc-100 focus:border-indigo-500 focus:outline-none"
-                   oninput="updateDaysHint(this)"> days
-            <span class="days-hint text-zinc-500">(${humanDays((c.recently_added || {}).days ?? 14)})</span>
-          </label>`
+          daysPickerHtml('recently-added-days', (c.recently_added || {}).days ?? 14, 'last')
         )}
 
         <div class="mb-4">
@@ -855,15 +878,10 @@ function renderSettings(cfg, rules, behavior, protectedUsers, protectedTags, pro
         </span>
       </div>
 
-      <label class="block mb-3">
-        <span class="text-sm text-zinc-300">Grace period (days)</span>
-        <div class="flex items-center gap-2 mt-1">
-          <input type="number" id="cfg-grace-days" value="${cfg.grace_days}" min="0" max="9999"
-                 class="w-32 bg-zinc-900 border border-zinc-700 rounded-md px-3 py-2 text-sm text-zinc-100 focus:border-indigo-500 focus:outline-none"
-                 oninput="updateDaysHint(this)">
-          <span class="days-hint text-zinc-500 text-sm">(${humanDays(cfg.grace_days)})</span>
-        </div>
-      </label>
+      <div class="mb-3">
+        <span class="text-sm text-zinc-300 block mb-1">Grace period</span>
+        ${daysPickerHtml('cfg-grace-days', cfg.grace_days, '')}
+      </div>
       <p class="text-zinc-500 text-xs mb-4">How long to wait after content first matches before running post-grace steps.</p>
 
       <div id="pipeline-steps"></div>
