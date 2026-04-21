@@ -737,7 +737,7 @@ function renderSettings(cfg, rules, behavior, protectedUsers, protectedTags, pro
     <div class="tab-panel min-h-[200px]" id="tab-protect" style="display:none;">
       <p class="text-zinc-500 text-sm mb-3">Content matching <strong class="text-zinc-300">any</strong> protection is always kept.</p>
 
-      ${sectionHtml('protect-signals', 'Activity', `
+      ${sectionHtml('protect-signals', 'Common', `
         ${cardHtml('active-request', 'Unwatched Seerr requests', "Protect content where the person who requested it through Seerr hasn't watched it yet. Once they watch it, the protection lifts automatically", c.no_active_request.enabled, null)}
 
         ${cardHtml('on-watchlist', 'On a watchlist', "Protect items on any user's Plex watchlist (fetched via Overseerr).", (c.on_watchlist || {}).enabled || false, null)}
@@ -754,7 +754,7 @@ function renderSettings(cfg, rules, behavior, protectedUsers, protectedTags, pro
         )}
       `)}
 
-      ${sectionHtml('protect-metadata', 'Metadata', `
+      ${sectionHtml('protect-more', 'More protections', `
         ${cardHtml('highly-rated', 'Rating', 'Keep items whose audience or critic rating meets your threshold.', (c.highly_rated || {}).enabled || false, null)}
         <div id="highly-rated-options" class="ml-14 mb-4 ${(c.highly_rated || {}).enabled ? '' : 'hidden'}">
           <div class="flex gap-4 flex-wrap items-end">
@@ -790,9 +790,7 @@ function renderSettings(cfg, rules, behavior, protectedUsers, protectedTags, pro
             <span class="days-hint text-zinc-500">(${humanDays((c.recently_added || {}).days ?? 14)})</span>
           </label>`
         )}
-      `)}
 
-      ${sectionHtml('protect-lists', 'Keep lists', `
         <div class="mb-4">
           <div class="font-semibold text-sm text-zinc-100">Protected users</div>
           <div class="text-zinc-500 text-xs mt-0.5">Content requested or watched by these users is always kept</div>
@@ -810,13 +808,11 @@ function renderSettings(cfg, rules, behavior, protectedUsers, protectedTags, pro
           <div class="text-zinc-500 text-xs mt-0.5">Items in these Plex/Jellyfin collections are never removed</div>
           <div id="protect-collections"></div>
         </div>
-      `)}
 
-      <div id="protect-tv-section" class="${isShow && granularity === 'season' ? '' : 'hidden'}">
-        ${sectionHtml('protect-more', 'More protections', `
+        <div id="protect-tv-section" class="${isShow && granularity === 'season' ? '' : 'hidden'}">
           ${cardHtml('series-protection', 'Series-level protection', 'Protect seasons if their parent show matches any other protection in this rule.', (c.series_protection || {}).enabled || false, null)}
-        `, { defaultClosed: true })}
-      </div>
+        </div>
+      `, { defaultClosed: true })}
     </div>
 
     <!-- TAB: ACTIONS -->
