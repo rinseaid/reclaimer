@@ -216,7 +216,6 @@ type CollectionCriteria struct {
 	ProtectedUsers          []string                   `json:"protected_users"`
 	ProtectedTags           []string                   `json:"protected_tags"`
 	ProtectedCollections    []string                   `json:"protected_collections"`
-	WatchlistProtectedUsers []string                   `json:"watchlist_protected_users"`
 	LibrarySectionID        *StringOrInt               `json:"library_section_id"`
 	LibrarySource           string                     `json:"library_source"`
 	Granularity             string                     `json:"granularity"`

@@ -281,7 +281,6 @@ function loadConfig() {
         old_content_days: typeof old.days === 'number' ? old.days : 180,
       };
 
-      const watchlistProtectedUsers = criteria.watchlist_protected_users || [];
       const protectedTags = criteria.protected_tags || [];
       const protectedCollections = criteria.protected_collections || [];
 
@@ -314,7 +313,7 @@ function loadConfig() {
         dlTags.id = 'dl-tags';
         dlTags.innerHTML = (window._arrTags || []).map(t => `<option value="${t}">`).join('');
         if (!dlTags.parentNode) document.body.appendChild(dlTags);
-        renderSettings(cfg, rules, behavior, protectedUsers, protectedTags, protectedCollections, watchlistProtectedUsers, isShow, savedLibrarySection, savedLibrarySource, newCriteria, savedGranularity);
+        renderSettings(cfg, rules, behavior, protectedUsers, protectedTags, protectedCollections, isShow, savedLibrarySection, savedLibrarySource, newCriteria, savedGranularity);
       });
     })
     .catch(err => {
@@ -538,7 +537,7 @@ function cardHtml(id, title, desc, enabled, optionsHtml, extraClass) {
   </div>`;
 }
 
-function renderSettings(cfg, rules, behavior, protectedUsers, protectedTags, protectedCollections, watchlistProtectedUsers, isShow, savedLibrarySection, savedLibrarySource, nc, granularity) {
+function renderSettings(cfg, rules, behavior, protectedUsers, protectedTags, protectedCollections, isShow, savedLibrarySection, savedLibrarySource, nc, granularity) {
   const body = document.getElementById('settings-body');
   const c = rules;
 
@@ -741,7 +740,7 @@ function renderSettings(cfg, rules, behavior, protectedUsers, protectedTags, pro
       ${sectionHtml('protect-signals', 'Activity', `
         ${cardHtml('active-request', 'Unwatched Seerr requests', "Protect content where the person who requested it through Seerr hasn't watched it yet. Once they watch it, the protection lifts automatically", c.no_active_request.enabled, null)}
 
-        ${cardHtml('on-watchlist', 'On a watchlist', "Protect items anyone has on their Seerr watchlist.", (c.on_watchlist || {}).enabled || false, null)}
+        ${cardHtml('on-watchlist', 'On a watchlist', "Protect items on any user's Plex watchlist (fetched via Overseerr).", (c.on_watchlist || {}).enabled || false, null)}
 
         ${cardHtml('plex-favorited', 'Favorited in Plex', "Protect items you've hearted in Plex.", (c.plex_favorited || {}).enabled || false, null)}
 
@@ -798,15 +797,6 @@ function renderSettings(cfg, rules, behavior, protectedUsers, protectedTags, pro
           <div class="font-semibold text-sm text-zinc-100">Protected users</div>
           <div class="text-zinc-500 text-xs mt-0.5">Content requested or watched by these users is always kept</div>
           <div id="protect-users"></div>
-        </div>
-
-        <div class="mb-4">
-          <div class="font-semibold text-sm text-zinc-100">Watchlisted content</div>
-          <div class="text-zinc-500 text-xs mt-0.5">Content on users' Plex/Jellyfin watchlists is never removed</div>
-          <label class="flex items-center gap-2 mt-2 mb-2 text-sm text-zinc-300 cursor-pointer">
-            <input type="checkbox" id="watchlist-all-users" onchange="toggleWatchlistAll()" class="accent-indigo-500"> All users
-          </label>
-          <div id="watchlist-users" style="display:none;"></div>
         </div>
 
         <div class="mb-4">
@@ -975,24 +965,6 @@ function renderSettings(cfg, rules, behavior, protectedUsers, protectedTags, pro
     onChange: () => updateSummaryCard(),
   });
 
-  // Watchlist protection
-  const watchlistIsAll = watchlistProtectedUsers.length === 1 && watchlistProtectedUsers[0] === '__all__';
-  const watchlistAllCb = document.getElementById('watchlist-all-users');
-  const watchlistUsersDiv = document.getElementById('watchlist-users');
-  if (watchlistAllCb) watchlistAllCb.checked = watchlistIsAll;
-  if (watchlistUsersDiv) watchlistUsersDiv.style.display = watchlistIsAll ? 'none' : '';
-
-  createChipInput({
-    containerId: 'watchlist-users',
-    placeholder: 'Type a username...',
-    initialValues: watchlistIsAll ? [] : watchlistProtectedUsers,
-    suggestions: userSuggestions,
-    allowFreeform: true,
-    renderChip: (u) => `${userAvatarHtml(u)} ${u}`,
-    renderSuggestion: (u) => `<span class="flex items-center gap-2">${userAvatarHtml(u, 22)} ${u}</span>`,
-    onChange: () => updateSummaryCard(),
-  });
-
   // Persist collapsible section open/closed state per section key.
   document.querySelectorAll('details[data-section-key]').forEach(det => {
     det.addEventListener('toggle', () => {
@@ -1042,7 +1014,7 @@ const CRITERIA_TOOLTIPS = {
   'active-request':       "Protect if the item has an active Seerr request from someone who hasn't watched it yet. Once the requester watches it, the protection lifts automatically.",
   'recently-added':       "Keep items added in the last N days so fresh additions don't get nuked before anyone has a chance to watch them. Companion to the Library age criterion on the Removal Criteria tab.",
   'partially-watched':    "Keep items someone started watching but didn't finish within the last N days. Uses Plex viewOffset and play history.",
-  'on-watchlist':         "Protect items anyone has on their Seerr watchlist.",
+  'on-watchlist':         "Protect items on any user's Plex watchlist (fetched via Overseerr).",
   'plex-favorited':       "Protect items you've hearted in Plex (rating = 10 on the user object).",
   'highly-rated':         "Keep items whose audience or critic rating meets your threshold. Companion to the Rating criterion on the Removal Criteria tab.",
   'series-protection':    "Protect all seasons of a show if any of the protections above apply to the show itself. TV rules with season granularity only.",
@@ -1160,11 +1132,6 @@ function describeProtections() {
   if (_safeChipValues('protect-users').length > 0)       parts.push("certain users' activity");
   if (_safeChipValues('protect-tags').length > 0)        parts.push('tagged items');
   if (_safeChipValues('protect-collections').length > 0) parts.push('items in protected collections');
-
-  // Watchlist-protected users (separate chip section)
-  const watchAll = document.getElementById('watchlist-all-users')?.checked;
-  if (watchAll) parts.push("anyone's watchlist");
-  else if (_safeChipValues('watchlist-users').length > 0) parts.push("certain users' watchlists");
 
   if (_cfgEnabled('series-protection')) parts.push('seasons of protected shows');
   return parts;
@@ -2058,13 +2025,6 @@ function handleActionChange() {
   // legacy
 }
 
-function toggleWatchlistAll() {
-  const allChecked = document.getElementById('watchlist-all-users')?.checked;
-  const usersDiv = document.getElementById('watchlist-users');
-  if (usersDiv) usersDiv.style.display = allChecked ? 'none' : '';
-  if (typeof updateSummaryCard === 'function') updateSummaryCard();
-}
-
 
 /* --- Save / Delete --- */
 
@@ -2181,9 +2141,6 @@ function gatherCriteria() {
     protected_users: userValues,
     protected_tags: tagValues,
     protected_collections: collectionValues,
-    watchlist_protected_users: document.getElementById('watchlist-all-users')?.checked
-      ? ['__all__']
-      : (chipInputs['watchlist-users']?.getValues() || []),
     library_section_id: (() => {
       const val = document.getElementById('cfg-library')?.value;
       const parsed = parseInt(val);
