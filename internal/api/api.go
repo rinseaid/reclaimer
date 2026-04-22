@@ -236,7 +236,8 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 			}
 		}
 		collections[cfg.Name] = map[string]any{
-			"staged": 0, "actioned": 0, "migrated": 0, "kept": 0, "total": 0, "total_bytes": int64(0),
+			"staged": 0, "actioned": 0, "migrated": 0, "kept": 0, "total": 0,
+			"total_bytes": int64(0), "staged_bytes": int64(0),
 			"grace_days":      cfg.GraceDays,
 			"action_pipeline": pipeline,
 			"enabled":         cfg.Enabled,
@@ -255,13 +256,17 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	for _, row := range rows {
 		if _, ok := collections[row.Collection]; !ok {
 			collections[row.Collection] = map[string]any{
-				"staged": 0, "actioned": 0, "migrated": 0, "kept": 0, "total": 0, "total_bytes": int64(0),
+				"staged": 0, "actioned": 0, "migrated": 0, "kept": 0, "total": 0,
+				"total_bytes": int64(0), "staged_bytes": int64(0),
 			}
 		}
 		c := collections[row.Collection]
 		c[row.Status] = c[row.Status].(int) + 1
 		c["total"] = c["total"].(int) + 1
 		c["total_bytes"] = c["total_bytes"].(int64) + row.SizeBytes
+		if row.Status == "staged" {
+			c["staged_bytes"] = c["staged_bytes"].(int64) + row.SizeBytes
+		}
 
 		if cur, ok := rkMaxSize[row.RatingKey]; !ok || row.SizeBytes > cur {
 			rkMaxSize[row.RatingKey] = row.SizeBytes
