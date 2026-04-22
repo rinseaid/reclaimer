@@ -552,13 +552,18 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 		totalRemoved += removed
 
 		ruleDuration := time.Since(tRule)
+		var trackedCount int
+		o.DB.Get(&trackedCount, o.DB.Rebind(
+			"SELECT COUNT(*) FROM items WHERE collection = ?"), colCfg.Name)
+
 		o.logActivity("rule_processed", colCfg.Name, "", "", map[string]any{
-			"items":      len(items),
-			"matched":    matched,
-			"added":      added,
-			"removed":    removed,
-			"duration":   ruleDuration.Seconds(),
-			"dry_run":    dryRun,
+			"evaluated": len(items),
+			"candidates":  matched,
+			"tracked":   trackedCount,
+			"added":     added,
+			"removed":   removed,
+			"duration":  ruleDuration.Seconds(),
+			"dry_run":   dryRun,
 		})
 	}
 
