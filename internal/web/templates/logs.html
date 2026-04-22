@@ -383,7 +383,10 @@ function renderAll() {
                 const d = typeof a.detail === 'string' ? JSON.parse(a.detail) : a.detail;
                 const parts = [];
                 if (d.items != null) parts.push(d.items + ' items');
-                if (d.candidates != null) parts.push(d.candidates + ' matched');
+                if (d.matched != null) parts.push(d.matched + ' matched');
+                else if (d.candidates != null) parts.push(d.candidates + ' matched');
+                if (d.added > 0) parts.push(d.added + ' new');
+                if (d.removed > 0) parts.push(d.removed + ' removed');
                 if (d.reason) parts.push(d.reason);
                 if (d.dry_run || isDry) parts.push(dryRunPill());
                 detail = parts.join(' \u00B7 ');
