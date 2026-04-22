@@ -768,7 +768,7 @@ function renderSettings(cfg, rules, behavior, protectedUsers, protectedTags, pro
       ${sectionHtml('protect-signals', 'Common', `
         ${cardHtml('active-request', 'Unwatched Seerr requests', "Protect content where the person who requested it through Seerr hasn't watched it yet. Once they watch it, the protection lifts automatically", c.no_active_request.enabled, null)}
 
-        ${cardHtml('on-watchlist', 'On a watchlist', "Protect items on any user's Plex watchlist (fetched via Overseerr).", (c.on_watchlist || {}).enabled || false, null)}
+        ${cardHtml('on-watchlist', 'On a watchlist', "Protect items on any user's Plex watchlist (fetched via Seerr).", (c.on_watchlist || {}).enabled || false, null)}
 
         ${cardHtml('plex-favorited', 'Favorited in Plex', "Protect items you've hearted in Plex.", (c.plex_favorited || {}).enabled || false, null)}
 
@@ -1023,7 +1023,7 @@ const CRITERIA_TOOLTIPS = {
   'active-request':       "Protect if the item has an active Seerr request from someone who hasn't watched it yet. Once the requester watches it, the protection lifts automatically.",
   'recently-added':       "Keep items added in the last N days so fresh additions don't get nuked before anyone has a chance to watch them.",
   'partially-watched':    "Keep items someone started watching but didn't finish within the last N days. Uses Plex viewOffset and play history.",
-  'on-watchlist':         "Protect items on any user's Plex watchlist (fetched via Overseerr).",
+  'on-watchlist':         "Protect items on any user's Plex watchlist (fetched via Seerr).",
   'plex-favorited':       "Protect items you've hearted in Plex (rating = 10 on the user object).",
   'highly-rated':         "Keep items whose audience or critic rating meets your threshold.",
   'series-protection':    "Protect all seasons of a show if any of the protections above apply to the show itself. TV rules with season granularity only.",

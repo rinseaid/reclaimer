@@ -885,7 +885,7 @@ func (s *Server) handleEvaluateItem(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSeerrRequests(w http.ResponseWriter, r *http.Request) {
-	// TODO: fetch from Seerr/Overseerr API
+	// TODO: fetch from Seerr API
 	rk := chi.URLParam(r, "ratingKey")
 	writeJSON(w, http.StatusOK, map[string]any{"rating_key": rk, "requests": []any{}})
 }
