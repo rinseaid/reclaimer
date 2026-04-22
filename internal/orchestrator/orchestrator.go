@@ -1,6 +1,6 @@
 // Package orchestrator contains the core business logic engine for media
 // lifecycle management. It assembles data from Plex, Jellyfin, Radarr,
-// Sonarr, and Overseerr, evaluates per-collection rules, stages candidate
+// Sonarr, and Seerr, evaluates per-collection rules, stages candidate
 // items, executes after-grace action pipelines, and syncs media-server
 // collections.
 package orchestrator
@@ -153,7 +153,7 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 	// ---------------------------------------------------------------
 	// Phase 1: Data Assembly
 	// ---------------------------------------------------------------
-	o.updateProgress("fetching_data", "Fetching Plex, Radarr, Sonarr, Overseerr data...", 5, 0, 0)
+	o.updateProgress("fetching_data", "Fetching Plex, Radarr, Sonarr, Seerr data...", 5, 0, 0)
 
 	plex_url := o.Config.GetString("plex_url")
 	plex_token := o.Config.GetString("plex_token")
@@ -245,7 +245,7 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 		slog.Warn("Sonarr shows fetch failed", "error", sonarrShowsErr)
 	}
 	if requestErr != nil {
-		slog.Warn("Overseerr requests fetch failed", "error", requestErr)
+		slog.Warn("Seerr requests fetch failed", "error", requestErr)
 	}
 	if radarrMovies == nil {
 		radarrMovies = make(map[int]map[string]any)
@@ -1153,7 +1153,7 @@ func (o *Orchestrator) resolveWatchlistKeys(
 	wlItems, err := overseerr.FetchAllWatchlists(overseerrURL, overseerrKey)
 	if err != nil || len(wlItems) == 0 {
 		if err != nil {
-			slog.Warn("Overseerr watchlist fetch failed", "error", err)
+			slog.Warn("Seerr watchlist fetch failed", "error", err)
 		}
 		return watchlistRKs
 	}
