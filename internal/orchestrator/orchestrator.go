@@ -153,7 +153,7 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 	// ---------------------------------------------------------------
 	// Phase 1: Data Assembly
 	// ---------------------------------------------------------------
-	o.updateProgress("fetching_data", "Assembling data from services...", 5, 0, 0)
+	o.updateProgress("fetching_data", "Fetching Plex, Radarr, Sonarr, Overseerr data...", 5, 0, 0)
 
 	plex_url := o.Config.GetString("plex_url")
 	plex_token := o.Config.GetString("plex_token")
@@ -267,7 +267,7 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 		}
 	}
 
-	o.updateProgress("loading_db_plays", "Aggregating watch history...", 15, 0, 0)
+	o.updateProgress("loading_db_plays", "Loading watch history and play counts...", 15, 0, 0)
 
 	// Aggregate play counts, last watch dates, user watches from watch_history.
 	playCounts := o.aggregatePlayCounts()
@@ -279,7 +279,7 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 	// Extract ratings from library metadata.
 	ratingsMap := o.extractRatingsFromLibraries(plexMovies, plexTV)
 
-	o.updateProgress("fetching_keep_collections", "Fetching keep collections...", 20, 0, 0)
+	o.updateProgress("fetching_keep_collections", "Fetching keep collections and ratings...", 20, 0, 0)
 
 	// Keep collections.
 	moviesKeep := o.fetchKeepKeys(plex_url, plex_token, moviesSection,
@@ -308,7 +308,7 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 		}
 	}
 
-	o.updateProgress("building_context", "Building extended evaluation context...", 25, 0, 0)
+	o.updateProgress("building_context", "Building watchlists, favorites, partial watches...", 25, 0, 0)
 
 	// Extended context fields: favorites, watchlist, partial watches, etc.
 	addedAtByKey := o.buildAddedAtByKey(plexMovies, plexTV)
@@ -544,7 +544,7 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 			"action", criteria.Action, "grace_days", criteria.GraceDays, "items", len(items))
 
 		tRule := time.Now()
-		added, removed := o.processCollection(
+		matched, added, removed := o.processCollection(
 			colCfg.Name, items, evalFn, ruleCtx, criteria, sectionID,
 			colCfg.MediaType, dryRun, today, librarySource, deferredSyncs,
 		)
@@ -554,7 +554,9 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 		ruleDuration := time.Since(tRule)
 		o.logActivity("rule_processed", colCfg.Name, "", "", map[string]any{
 			"items":      len(items),
-			"candidates": added,
+			"matched":    matched,
+			"added":      added,
+			"removed":    removed,
 			"duration":   ruleDuration.Seconds(),
 			"dry_run":    dryRun,
 		})
@@ -1400,7 +1402,7 @@ func (o *Orchestrator) processCollection(
 	today string,
 	librarySource string,
 	deferredSyncs map[collectionSyncKey]map[string]bool,
-) (added, removed int) {
+) (matched, added, removed int) {
 	total := len(items)
 	graceDate := addDaysISO(today, criteria.GraceDays)
 
@@ -1717,9 +1719,10 @@ func (o *Orchestrator) processCollection(
 		}
 	}
 
+	matched = len(want)
 	slog.Info("Collection processed", "name", collectionName,
-		"candidates", len(want), "added", added, "removed", removed)
-	return added, removed
+		"matched", matched, "added", added, "removed", removed)
+	return matched, added, removed
 }
 
 // ---------------------------------------------------------------------------

@@ -1845,6 +1845,13 @@ func (s *Server) handleTriggerRun(w http.ResponseWriter, r *http.Request) {
 			s.running = false
 			s.runProgress["status"] = "complete"
 			s.runProgress["completed_at"] = models.NowISO()
+			if lr := s.Orchestrator.GetLastResult(); lr != nil {
+				s.runProgress["last_result"] = map[string]any{
+					"dry_run": lr.DryRun,
+					"added":   lr.Added,
+					"removed": lr.Removed,
+				}
+			}
 			s.runMu.Unlock()
 		}()
 
