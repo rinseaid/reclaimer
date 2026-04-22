@@ -831,18 +831,74 @@ window.showToast = function(message, kind) {
             return new Date(s).toLocaleString();
         })() : '';
 
-        const pendingColor = data.pending_actions > 0 ? 'text-rose-500' : 'text-zinc-100';
+        // Build action breakdown: group staged items by their collection's primary action.
+        const ACTION_LABELS = {
+            'delete': 'Pending deletion',
+            'delete_files': 'Pending file deletion',
+            'unmonitor': 'Pending unmonitor',
+            'import_exclusion': 'Pending exclusion',
+            'migrate_to_instance': 'Pending migration',
+            'sync_collection': 'Syncing to collection',
+            'add_arr_tag': 'Pending tagging',
+            'remove_arr_tag': 'Pending tag removal',
+            'set_root_folder': 'Pending folder move',
+            'swap_quality_profile': 'Pending quality swap',
+            'downgrade_quality': 'Pending quality downgrade',
+            'trigger_search': 'Pending search',
+            'notify': 'Pending notification',
+            'script': 'Pending script',
+        };
+
+        function primaryAction(pipeline) {
+            if (!pipeline || pipeline.length === 0) return null;
+            const afterGrace = pipeline.filter(s => stepTiming(s) !== 'immediate');
+            if (afterGrace.length > 0) return afterGrace[0].type;
+            return pipeline[0].type;
+        }
+
+        const actionGroups = {};
+        for (const [name, stats] of Object.entries(collections)) {
+            const staged = stats.staged || 0;
+            if (staged === 0) continue;
+            const action = primaryAction(stats.action_pipeline) || 'none';
+            if (!actionGroups[action]) actionGroups[action] = { count: 0, bytes: 0 };
+            actionGroups[action].count += staged;
+            actionGroups[action].bytes += (stats.staged_bytes || 0);
+        }
+
+        let breakdownHtml = '';
+        const actionKeys = Object.keys(actionGroups);
+        if (actionKeys.length === 0) {
+            breakdownHtml = '<div class="text-zinc-500 text-xs mt-2">No pending actions</div>';
+        } else {
+            breakdownHtml = '<ul class="mt-3 space-y-1">';
+            for (const [action, group] of Object.entries(actionGroups)) {
+                const label = ACTION_LABELS[action] || action;
+                const sizeStr = formatBytes(group.bytes);
+                breakdownHtml += `<li class="flex items-center justify-between text-xs">
+                    <span class="text-zinc-300">${label}</span>
+                    <span class="tabular-nums text-zinc-400">${group.count} item${group.count !== 1 ? 's' : ''}${sizeStr ? ' &middot; ' + sizeStr : ''}</span>
+                </li>`;
+            }
+            breakdownHtml += '</ul>';
+        }
+
+        const totalStaged = Object.values(actionGroups).reduce((s, g) => s + g.count, 0);
+        const totalStagedBytes = Object.values(actionGroups).reduce((s, g) => s + g.bytes, 0);
+        const pendingColor = totalStaged > 0 ? 'text-rose-500' : 'text-zinc-100';
+        const pendingSizeStr = formatBytes(totalStagedBytes);
 
         document.getElementById('kpi-cards').innerHTML = `
-            <div class="bg-zinc-900 rounded-lg p-4 border border-zinc-800">
-                <small class="text-zinc-400 text-xs">Tracked Items</small>
-                <div class="text-4xl font-bold leading-tight text-zinc-100">${data.total_tracked}</div>
-                <small class="text-zinc-400 text-xs">across ${colNames.length} rule${colNames.length !== 1 ? 's' : ''}${totalBytes > 0 ? ' &middot; ' + formatBytes(totalBytes) : ''}</small>
-            </div>
-            <div class="bg-zinc-900 rounded-lg p-4 border border-zinc-800">
-                <small class="text-zinc-400 text-xs">Pending Actions</small>
-                <div class="text-4xl font-bold leading-tight ${pendingColor}">${data.pending_actions}</div>
-                <small class="text-zinc-400 text-xs">staged across all rules</small>
+            <div class="bg-zinc-900 rounded-lg p-4 border border-zinc-800 md:col-span-2">
+                <div class="flex items-baseline justify-between">
+                    <small class="text-zinc-400 text-xs">Pending Actions</small>
+                    <small class="text-zinc-500 text-xs">${data.total_tracked} tracked across ${colNames.length} rule${colNames.length !== 1 ? 's' : ''}${totalBytes > 0 ? ' &middot; ' + formatBytes(totalBytes) : ''}</small>
+                </div>
+                <div class="flex items-baseline gap-3">
+                    <span class="text-4xl font-bold leading-tight ${pendingColor}">${totalStaged}</span>
+                    ${pendingSizeStr ? '<span class="text-lg text-zinc-400">' + pendingSizeStr + '</span>' : ''}
+                </div>
+                ${breakdownHtml}
             </div>
             <div class="bg-zinc-900 rounded-lg p-4 border border-zinc-800">
                 <small class="text-zinc-400 text-xs">Last Run</small>
