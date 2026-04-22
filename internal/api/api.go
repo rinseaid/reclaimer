@@ -274,19 +274,15 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Build set of show rating_keys whose seasons are also tracked.
-	showsWithTrackedSeasons := map[string]bool{}
-	for _, parent := range seasonParents {
-		if _, tracked := rkMaxSize[parent]; tracked {
-			showsWithTrackedSeasons[parent] = true
-		}
-	}
-
 	totalTracked := len(rkMaxSize)
 	var totalSizeBytes int64
 	for rk, sz := range rkMaxSize {
-		if showsWithTrackedSeasons[rk] {
-			continue
+		// Skip seasons whose parent show is also tracked — the show's size
+		// already covers all seasons, so counting both double-counts.
+		if parent, isSeason := seasonParents[rk]; isSeason {
+			if _, showTracked := rkMaxSize[parent]; showTracked {
+				continue
+			}
 		}
 		totalSizeBytes += sz
 	}
