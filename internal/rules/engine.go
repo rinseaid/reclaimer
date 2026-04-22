@@ -94,6 +94,37 @@ type Result struct {
 	Severity string
 }
 
+var ruleDisplayNames = map[string]string{
+	"never_watched":        "Never watched",
+	"not_watched_recently": "Not watched recently",
+	"show_ended":           "Show ended / cancelled",
+	"old_content":          "Added long ago",
+	"low_rating":           "Low rating",
+	"highly_rated":         "Highly rated",
+	"file_size_min":        "Large file",
+	"release_year_before":  "Old release year",
+	"no_keep_tag":          "Protected by tag",
+	"no_active_request":    "Unwatched Seerr request",
+	"no_protected_request": "Protected user request",
+	"not_in_keep_collection": "In keep collection",
+	"recently_added":       "Recently added",
+	"partially_watched":    "Partially watched",
+	"on_watchlist":         "On a Plex watchlist",
+	"plex_favorited":       "Favorited in Plex",
+	"debrid_cached":        "Debrid cache status",
+	"request_fulfilled":    "Request fulfilled",
+	"available_on_debrid":  "Available on debrid",
+	"series_protection":    "Parent show protected",
+}
+
+// DisplayName returns a human-readable label for a rule name.
+func DisplayName(ruleName string) string {
+	if label, ok := ruleDisplayNames[ruleName]; ok {
+		return label
+	}
+	return ruleName
+}
+
 func EvaluateMovie(item map[string]any, ctx *EvaluationContext, criteria *models.CollectionCriteria, externalIDFn func(map[string]any, string) string) []Result {
 	var results []Result
 	rk := fmt.Sprintf("%v", item["ratingKey"])

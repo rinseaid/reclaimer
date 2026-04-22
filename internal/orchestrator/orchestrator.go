@@ -144,7 +144,7 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 	today := time.Now().Format("2006-01-02")
 	slog.Info("=== Reclaimer Run ===", "dry_run", dryRun, "rule_filter", ruleFilter)
 
-	o.updateProgress("starting", "Initializing run...", 0, 0, 0)
+	o.updateProgress("fetching_data", "Fetching Plex, Radarr, Sonarr, Seerr data...", 5, 0, 0)
 	o.logActivity("run_started", "", "", "", map[string]any{
 		"dry_run":     dryRun,
 		"rule_filter": ruleFilter,
@@ -153,7 +153,6 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 	// ---------------------------------------------------------------
 	// Phase 1: Data Assembly
 	// ---------------------------------------------------------------
-	o.updateProgress("fetching_data", "Fetching Plex, Radarr, Sonarr, Seerr data...", 5, 0, 0)
 
 	plex_url := o.Config.GetString("plex_url")
 	plex_token := o.Config.GetString("plex_token")
@@ -168,7 +167,7 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 	seerrURL := o.Config.GetString("seerr_url")
 	seerrKey := o.Config.GetString("seerr_api_key")
 
-	// Concurrent data fetches.
+	// Concurrent data fetches with per-source progress.
 	var (
 		plexMovies      []map[string]any
 		plexTV          []map[string]any
@@ -181,7 +180,17 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 		radarrMoviesErr error
 		sonarrShowsErr  error
 		requestErr      error
+		fetchedMu       sync.Mutex
+		fetched         []string
 	)
+
+	updateFetchProgress := func(source string) {
+		fetchedMu.Lock()
+		fetched = append(fetched, source)
+		msg := fmt.Sprintf("Fetched %s (%d/5)...", strings.Join(fetched, ", "), len(fetched))
+		fetchedMu.Unlock()
+		o.updateProgress("fetching_data", msg, 5, 0, 0)
+	}
 
 	radarrMovies = make(map[int]map[string]any)
 	sonarrShows = make(map[int]map[string]any)
@@ -194,6 +203,7 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 		if plex_url != "" && plex_token != "" && moviesSection > 0 {
 			plexMovies, plexMoviesErr = plex.FetchLibrary(plex_url, plex_token, moviesSection)
 		}
+		updateFetchProgress("Plex movies")
 	}()
 
 	go func() {
@@ -202,6 +212,7 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 		if plex_url != "" && plex_token != "" && tvSection > 0 {
 			plexTV, plexTVErr = plex.FetchLibrary(plex_url, plex_token, tvSection)
 		}
+		updateFetchProgress("Plex TV")
 	}()
 
 	go func() {
@@ -211,6 +222,7 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 		if err == nil && inst != nil {
 			radarrMovies, radarrMoviesErr = radarr.FetchMovies(inst.URL, inst.APIKey)
 		}
+		updateFetchProgress("Radarr")
 	}()
 
 	go func() {
@@ -220,6 +232,7 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 		if err == nil && inst != nil {
 			sonarrShows, sonarrShowsErr = sonarr.FetchShows(inst.URL, inst.APIKey)
 		}
+		updateFetchProgress("Sonarr")
 	}()
 
 	go func() {
@@ -228,6 +241,7 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 		protectedCSV := o.Config.GetString("protected_requesters")
 		protectedSet := parseCSVSet(protectedCSV)
 		requestData, requestErr = seerr.FetchActiveRequests(seerrURL, seerrKey, protectedSet)
+		updateFetchProgress("Seerr")
 	}()
 
 	fetchWG.Wait()
@@ -557,13 +571,13 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 			"SELECT COUNT(*) FROM items WHERE collection = ?"), colCfg.Name)
 
 		o.logActivity("rule_processed", colCfg.Name, "", "", map[string]any{
-			"evaluated": len(items),
-			"candidates":  matched,
-			"tracked":   trackedCount,
-			"added":     added,
-			"removed":   removed,
-			"duration":  ruleDuration.Seconds(),
-			"dry_run":   dryRun,
+			"library":    len(items),
+			"candidates": matched,
+			"tracked":    trackedCount,
+			"added":      added,
+			"removed":    removed,
+			"duration":   ruleDuration.Seconds(),
+			"dry_run":    dryRun,
 		})
 	}
 
@@ -1660,11 +1674,11 @@ func (o *Orchestrator) processCollection(
 			var failed []string
 			for _, r := range rr {
 				if !r.Passed {
-					failed = append(failed, r.RuleName)
+					failed = append(failed, rules.DisplayName(r.RuleName))
 				}
 			}
 			if len(failed) > 0 {
-				detail["reason"] = "Failed: " + strings.Join(failed, ", ")
+				detail["reason"] = "Protected: " + strings.Join(failed, ", ")
 			}
 		}
 		o.logActivity("item_removed", collectionName, t.RatingKey, t.Title, detail)

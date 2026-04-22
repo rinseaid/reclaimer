@@ -382,12 +382,9 @@ function renderAll() {
             try {
                 const d = typeof a.detail === 'string' ? JSON.parse(a.detail) : a.detail;
                 const parts = [];
-                if (d.evaluated != null) parts.push(d.evaluated + ' evaluated');
-                else if (d.items != null) parts.push(d.items + ' evaluated');
-                if (d.candidates != null) parts.push(d.candidates + ' candidates');
-                else if (d.matched != null) parts.push(d.matched + ' candidates');
-                if (d.tracked != null) parts.push(d.tracked + ' tracked');
-                if (d.added > 0) parts.push(d.added + ' new');
+                const cand = d.candidates ?? d.matched;
+                if (cand != null) parts.push(cand + ' meet rule criteria');
+                if (d.added > 0) parts.push(d.added + ' added');
                 if (d.removed > 0) parts.push(d.removed + ' removed');
                 if (d.reason) parts.push(d.reason);
                 if (d.dry_run || isDry) parts.push(dryRunPill());
