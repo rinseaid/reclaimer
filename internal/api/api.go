@@ -249,6 +249,7 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	// a show and its seasons are both tracked (they share the same underlying files).
 	rkMaxSize := map[string]int64{}
 	rkStaged := map[string]bool{}
+	rkStagedSize := map[string]int64{}
 	// showRKs: set of rating_keys that are show-level items (have seasons pointing to them).
 	// seasonParents: for each season rating_key, its parent show_rating_key.
 	seasonParents := map[string]string{}
@@ -273,6 +274,9 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		}
 		if row.Status == "staged" {
 			rkStaged[row.RatingKey] = true
+			if cur, ok := rkStagedSize[row.RatingKey]; !ok || row.SizeBytes > cur {
+				rkStagedSize[row.RatingKey] = row.SizeBytes
+			}
 		}
 		if row.ShowRatingKey.Valid && row.ShowRatingKey.String != "" {
 			seasonParents[row.RatingKey] = row.ShowRatingKey.String
@@ -292,6 +296,15 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		totalSizeBytes += sz
 	}
 	pendingActions := len(rkStaged)
+	var pendingSizeBytes int64
+	for rk, sz := range rkStagedSize {
+		if parent, isSeason := seasonParents[rk]; isSeason {
+			if _, showTracked := rkStagedSize[parent]; showTracked {
+				continue
+			}
+		}
+		pendingSizeBytes += sz
+	}
 
 	var lastRun sql.NullString
 	_ = s.DB.Get(&lastRun, `SELECT MAX(timestamp) FROM activity_log WHERE event_type = 'run_completed'`)
@@ -304,12 +317,13 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	settings := s.Config.GetAll(true)
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"collections":      collections,
-		"total_tracked":    totalTracked,
-		"total_size_bytes": totalSizeBytes,
-		"pending_actions":  pendingActions,
-		"last_run":         lastRunObj,
-		"settings":         settings,
+		"collections":        collections,
+		"total_tracked":      totalTracked,
+		"total_size_bytes":   totalSizeBytes,
+		"pending_actions":    pendingActions,
+		"pending_size_bytes": pendingSizeBytes,
+		"last_run":           lastRunObj,
+		"settings":           settings,
 	})
 }
 

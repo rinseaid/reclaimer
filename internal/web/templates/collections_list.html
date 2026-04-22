@@ -883,8 +883,8 @@ window.showToast = function(message, kind) {
             breakdownHtml += '</ul>';
         }
 
-        const totalStaged = Object.values(actionGroups).reduce((s, g) => s + g.count, 0);
-        const totalStagedBytes = Object.values(actionGroups).reduce((s, g) => s + g.bytes, 0);
+        const totalStaged = data.pending_actions || 0;
+        const totalStagedBytes = data.pending_size_bytes || 0;
         const pendingColor = totalStaged > 0 ? 'text-rose-500' : 'text-zinc-100';
         const pendingSizeStr = formatBytes(totalStagedBytes);
 
