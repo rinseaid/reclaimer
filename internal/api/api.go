@@ -211,10 +211,17 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		Count      int    `db:"cnt"`
 		TotalSize  int64  `db:"total_size"`
 	}
-	var stats []collStat
-	err := s.DB.Select(&stats, `
-		SELECT collection, status, COUNT(*) as cnt, COALESCE(SUM(size_bytes), 0) as total_size
-		FROM items GROUP BY collection, status
+	// Per-row query so we can dedup by rating_key across collections.
+	type itemRow struct {
+		Collection string `db:"collection"`
+		Status     string `db:"status"`
+		RatingKey  string `db:"rating_key"`
+		SizeBytes  int64  `db:"size_bytes"`
+	}
+	var rows []itemRow
+	err := s.DB.Select(&rows, `
+		SELECT collection, status, rating_key, COALESCE(size_bytes, 0) as size_bytes
+		FROM items
 	`)
 	if err != nil {
 		slog.Error("dashboard stats", "error", err)
@@ -223,16 +230,8 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 	}
 
 	configs, _ := s.Store.ListCollectionConfigs()
-	configMap := map[string]models.CollectionConfig{}
-	for _, cfg := range configs {
-		configMap[cfg.Name] = cfg
-	}
 
 	collections := map[string]map[string]any{}
-	var totalTracked int
-	var totalSizeBytes int64
-	var pendingActions int
-
 	for _, cfg := range configs {
 		var pipeline any
 		if cfg.Criteria.Valid {
@@ -250,22 +249,35 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	for _, st := range stats {
-		if _, ok := collections[st.Collection]; !ok {
-			collections[st.Collection] = map[string]any{
+	// Dedup: track max size per rating_key and whether it's staged anywhere.
+	rkMaxSize := map[string]int64{}
+	rkStaged := map[string]bool{}
+
+	for _, row := range rows {
+		if _, ok := collections[row.Collection]; !ok {
+			collections[row.Collection] = map[string]any{
 				"staged": 0, "actioned": 0, "migrated": 0, "kept": 0, "total": 0, "total_bytes": int64(0),
 			}
 		}
-		c := collections[st.Collection]
-		c[st.Status] = st.Count
-		c["total"] = c["total"].(int) + st.Count
-		c["total_bytes"] = c["total_bytes"].(int64) + st.TotalSize
-		totalTracked += st.Count
-		totalSizeBytes += st.TotalSize
-		if st.Status == "staged" {
-			pendingActions += st.Count
+		c := collections[row.Collection]
+		c[row.Status] = c[row.Status].(int) + 1
+		c["total"] = c["total"].(int) + 1
+		c["total_bytes"] = c["total_bytes"].(int64) + row.SizeBytes
+
+		if cur, ok := rkMaxSize[row.RatingKey]; !ok || row.SizeBytes > cur {
+			rkMaxSize[row.RatingKey] = row.SizeBytes
+		}
+		if row.Status == "staged" {
+			rkStaged[row.RatingKey] = true
 		}
 	}
+
+	totalTracked := len(rkMaxSize)
+	var totalSizeBytes int64
+	for _, sz := range rkMaxSize {
+		totalSizeBytes += sz
+	}
+	pendingActions := len(rkStaged)
 
 	var lastRun sql.NullString
 	_ = s.DB.Get(&lastRun, `SELECT MAX(timestamp) FROM activity_log WHERE event_type = 'run_completed'`)
