@@ -1045,6 +1045,7 @@ window.showToast = function(message, kind) {
 
     function phaseLabel(phase) {
         const labels = {
+            'fetching_data': 'Fetching data',
             'fetching_plex': 'Fetching from Plex',
             'fetching_radarr': 'Fetching from Radarr',
             'fetching_sonarr': 'Fetching from Sonarr',
@@ -1144,7 +1145,6 @@ window.showToast = function(message, kind) {
                                 <a href="/logs" class="ml-auto text-xs text-indigo-400 hover:text-indigo-300">View logs</a>
                                 <button onclick="location.reload()" class="rounded-md px-2 py-1 text-xs font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent">Refresh</button>
                             </div>`;
-                        showToast(isDry + ' completed: ' + summary, 'success');
                         currentRunMode = null;
                     } else {
                         showProgress(d, currentRunMode);

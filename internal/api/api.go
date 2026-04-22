@@ -1836,6 +1836,8 @@ func (s *Server) handleTriggerRun(w http.ResponseWriter, r *http.Request) {
 		"started_at": models.NowISO(),
 		"dry_run":    dryRun,
 		"rule":       rule,
+		"phase":      "fetching_data",
+		"detail":     "Fetching Plex, Radarr, Sonarr, Seerr data...",
 	}
 	s.runMu.Unlock()
 

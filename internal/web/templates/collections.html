@@ -1485,7 +1485,6 @@ function showRunCompleted(lr, isDry) {
       <span class="text-zinc-400">${summary}</span>
       <a href="/logs?rule=${encodeURIComponent(colName)}" class="ml-auto text-xs text-indigo-400 hover:text-indigo-300">View logs</a>
     </div>`;
-  showToast(`${label} completed: ${summary}`, 'success');
 }
 
 let runPollTimer = null;
