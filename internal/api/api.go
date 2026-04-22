@@ -205,22 +205,17 @@ func redactInstance(inst models.ArrInstance) models.ArrInstance {
 // ---------------------------------------------------------------------------
 
 func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
-	type collStat struct {
-		Collection string `db:"collection"`
-		Status     string `db:"status"`
-		Count      int    `db:"cnt"`
-		TotalSize  int64  `db:"total_size"`
-	}
 	// Per-row query so we can dedup by rating_key across collections.
 	type itemRow struct {
-		Collection string `db:"collection"`
-		Status     string `db:"status"`
-		RatingKey  string `db:"rating_key"`
-		SizeBytes  int64  `db:"size_bytes"`
+		Collection     string         `db:"collection"`
+		Status         string         `db:"status"`
+		RatingKey      string         `db:"rating_key"`
+		ShowRatingKey  sql.NullString `db:"show_rating_key"`
+		SizeBytes      int64          `db:"size_bytes"`
 	}
 	var rows []itemRow
 	err := s.DB.Select(&rows, `
-		SELECT collection, status, rating_key, COALESCE(size_bytes, 0) as size_bytes
+		SELECT collection, status, rating_key, show_rating_key, COALESCE(size_bytes, 0) as size_bytes
 		FROM items
 	`)
 	if err != nil {
@@ -249,9 +244,13 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Dedup: track max size per rating_key and whether it's staged anywhere.
+	// Dedup: track unique rating_keys and avoid double-counting bytes when
+	// a show and its seasons are both tracked (they share the same underlying files).
 	rkMaxSize := map[string]int64{}
 	rkStaged := map[string]bool{}
+	// showRKs: set of rating_keys that are show-level items (have seasons pointing to them).
+	// seasonParents: for each season rating_key, its parent show_rating_key.
+	seasonParents := map[string]string{}
 
 	for _, row := range rows {
 		if _, ok := collections[row.Collection]; !ok {
@@ -270,11 +269,25 @@ func (s *Server) handleDashboard(w http.ResponseWriter, r *http.Request) {
 		if row.Status == "staged" {
 			rkStaged[row.RatingKey] = true
 		}
+		if row.ShowRatingKey.Valid && row.ShowRatingKey.String != "" {
+			seasonParents[row.RatingKey] = row.ShowRatingKey.String
+		}
+	}
+
+	// Build set of show rating_keys whose seasons are also tracked.
+	showsWithTrackedSeasons := map[string]bool{}
+	for _, parent := range seasonParents {
+		if _, tracked := rkMaxSize[parent]; tracked {
+			showsWithTrackedSeasons[parent] = true
+		}
 	}
 
 	totalTracked := len(rkMaxSize)
 	var totalSizeBytes int64
-	for _, sz := range rkMaxSize {
+	for rk, sz := range rkMaxSize {
+		if showsWithTrackedSeasons[rk] {
+			continue
+		}
 		totalSizeBytes += sz
 	}
 	pendingActions := len(rkStaged)
