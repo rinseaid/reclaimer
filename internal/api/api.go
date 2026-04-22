@@ -1250,7 +1250,7 @@ func (s *Server) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 			if body.APIKey == "" {
 				body.APIKey = s.Config.GetString("jellyfin_api_key")
 			}
-		case "overseerr", "jellyseerr":
+		case "seerr", "jellyseerr":
 			if body.URL == "" {
 				body.URL = s.Config.GetString(body.Service + "_url")
 			}
@@ -1278,7 +1278,7 @@ func (s *Server) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 		testURL = body.URL + "/System/Info/Public"
 	case "radarr", "sonarr", "lidarr", "readarr", "whisparr":
 		testURL = body.URL + "/api/v3/system/status"
-	case "overseerr", "jellyseerr":
+	case "seerr", "jellyseerr":
 		testURL = body.URL + "/api/v1/status"
 	case "apprise":
 		// Apprise notify endpoints only accept POST; test the base health endpoint instead.
@@ -1295,7 +1295,7 @@ func (s *Server) handleTestConnection(w http.ResponseWriter, r *http.Request) {
 			req.Header.Set("X-Plex-Token", body.APIKey)
 		case "jellyfin":
 			req.Header.Set("X-Emby-Token", body.APIKey)
-		case "overseerr", "jellyseerr":
+		case "seerr", "jellyseerr":
 			req.Header.Set("X-Api-Key", body.APIKey)
 		default:
 			req.Header.Set("X-Api-Key", body.APIKey)

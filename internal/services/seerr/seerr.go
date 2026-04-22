@@ -1,5 +1,5 @@
-// Package overseerr provides helpers for the Overseerr / Jellyseerr API.
-package overseerr
+// Package seerr provides helpers for the Seerr (Seerr / Jellyseerr) API.
+package seerr
 
 import (
 	"encoding/json"
@@ -16,7 +16,7 @@ import (
 // seerrTagPattern matches Seerr-style arr tags like "18 - angus.d0".
 var seerrTagPattern = regexp.MustCompile(`^\d+\s*-\s*(.+)$`)
 
-// statusLabels maps Overseerr request status codes to labels.
+// statusLabels maps Seerr request status codes to labels.
 var statusLabels = map[int]string{
 	1: "Pending Approval",
 	2: "Approved",
@@ -40,12 +40,12 @@ type RequestData struct {
 	ShowRequestersTmdb map[int]string
 }
 
-// seerrHeaders returns the standard header map for Overseerr requests.
+// seerrHeaders returns the standard header map for Seerr requests.
 func seerrHeaders(apiKey string) map[string]string {
 	return map[string]string{"X-Api-Key": apiKey}
 }
 
-// doGet performs a GET against the Overseerr API with the API key header.
+// doGet performs a GET against the Seerr API with the API key header.
 func doGet(url, apiKey, path string, params map[string]string) (*http.Response, error) {
 	return httpclient.Do(httpclient.Request{
 		Method:  http.MethodGet,
@@ -55,7 +55,7 @@ func doGet(url, apiKey, path string, params map[string]string) (*http.Response, 
 	})
 }
 
-// FetchActiveRequests paginates through all Overseerr requests and returns
+// FetchActiveRequests paginates through all Seerr requests and returns
 // sets of active/protected IDs plus requester maps.
 func FetchActiveRequests(url, apiKey string, protectedRequesters map[string]bool) (*RequestData, error) {
 	if url == "" || apiKey == "" {
@@ -317,7 +317,7 @@ func GetAPIUserID(url, apiKey string) (int, bool) {
 	return uid, true
 }
 
-// FetchAllWatchlists returns the union of every Overseerr user's watchlist.
+// FetchAllWatchlists returns the union of every Seerr user's watchlist.
 // Each entry has at least tmdbId and mediaType keys.
 func FetchAllWatchlists(url, apiKey string) ([]map[string]any, error) {
 	if url == "" || apiKey == "" {

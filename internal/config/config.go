@@ -27,10 +27,10 @@ var defaults = map[string]settingDef{
 	"jellyfin_tv_section":            {"", "JELLYFIN_TV_SECTION"},
 	"jellyfin_movies_keep_collection": {"", "JELLYFIN_MOVIES_KEEP_COLLECTION"},
 	"jellyfin_tv_keep_collection":    {"", "JELLYFIN_TV_KEEP_COLLECTION"},
-	"overseerr_url":                  {"", "OVERSEERR_URL"},
-	"overseerr_api_key":              {"", "OVERSEERR_API_KEY"},
+	"seerr_url":                  {"", "SEERR_URL"},
+	"seerr_api_key":              {"", "SEERR_API_KEY"},
 	"plex_public_url":                {"", "PLEX_PUBLIC_URL"},
-	"overseerr_public_url":           {"", "OVERSEERR_PUBLIC_URL"},
+	"seerr_public_url":           {"", "SEERR_PUBLIC_URL"},
 	"jellyfin_public_url":            {"", "JELLYFIN_PUBLIC_URL"},
 	"protected_requesters":           {"", "PROTECTED_REQUESTERS"},
 	"plex_movies_keep_collection":    {"", "PLEX_MOVIES_KEEP_COLLECTION"},
@@ -53,7 +53,7 @@ var defaults = map[string]settingDef{
 
 var sensitiveKeys = map[string]bool{
 	"plex_token":      true,
-	"overseerr_api_key": true,
+	"seerr_api_key": true,
 	"torbox_api_key":  true,
 	"rd_api_key":      true,
 	"jellyfin_api_key": true,

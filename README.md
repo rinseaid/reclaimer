@@ -249,8 +249,8 @@ services:
       SONARR_API_KEY: "..."
 
       # Optional upstreams
-      OVERSEERR_URL: "http://requests:5055"
-      OVERSEERR_API_KEY: "..."
+      SEERR_URL: "http://requests:5055"
+      SEERR_API_KEY: "..."
       APPRISE_URL: "http://apprise:8000/notify/media"
     restart: unless-stopped
 ```
@@ -315,7 +315,7 @@ On first boot, the single-instance env vars below are promoted into the multi-in
 
 | Variable | Description |
 |---|---|
-| `OVERSEERR_URL` / `OVERSEERR_API_KEY` | Request tracker — gates the `active_request` protection |
+| `SEERR_URL` / `SEERR_API_KEY` | Request tracker — gates the `active_request` protection |
 | `APPRISE_URL` | Notification gateway (any Apprise-compatible endpoint) |
 | `PROTECTED_REQUESTERS` | Comma-separated usernames whose requests block deletion |
 | `TORBOX_API_KEY` / `RD_API_KEY` | Cache-availability checks used by the offload flow |
