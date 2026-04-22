@@ -59,8 +59,14 @@ func (db *DB) Init() error {
 }
 
 func (db *DB) migrate() error {
-	// Migrations are handled by the schema being idempotent (IF NOT EXISTS).
-	// Future migrations can be added here incrementally.
+	renames := [][2]string{
+		{"overseerr_url", "seerr_url"},
+		{"overseerr_api_key", "seerr_api_key"},
+		{"overseerr_public_url", "seerr_public_url"},
+	}
+	for _, r := range renames {
+		db.Exec(db.Rebind("UPDATE settings SET key = ? WHERE key = ?"), r[1], r[0])
+	}
 	return nil
 }
 

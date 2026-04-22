@@ -40,27 +40,27 @@
 <div class="bg-zinc-900 rounded-lg p-6 border border-zinc-800 mb-6">
     <div class="flex items-center justify-between mb-4">
         <h3 class="text-lg font-semibold text-zinc-100">Seerr</h3>
-        <span class="text-sm font-normal text-zinc-400" id="status-overseerr"></span>
+        <span class="text-sm font-normal text-zinc-400" id="status-seerr"></span>
     </div>
     <div class="mb-4">
         <label class="block text-sm font-medium text-zinc-300 mb-1">URL</label>
-        <input type="text" name="overseerr_url" placeholder="http://seerr:5055"
+        <input type="text" name="seerr_url" placeholder="http://seerr:5055"
                class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
         <p class="text-xs text-zinc-500 mt-1">Base URL for your Seerr instance. Reclaimer checks for active requests here so it doesn't remove content that someone has specifically asked for.</p>
     </div>
     <div class="mb-4">
         <label class="block text-sm font-medium text-zinc-300 mb-1">Public URL</label>
-        <input type="text" name="overseerr_public_url" placeholder="https://seerr.example.com"
+        <input type="text" name="seerr_public_url" placeholder="https://seerr.example.com"
                class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
         <p class="text-xs text-zinc-500 mt-1">Public URL for browser links. Leave blank to use the API URL.</p>
     </div>
     <div class="mb-4">
         <label class="block text-sm font-medium text-zinc-300 mb-1">API Key</label>
-        <input type="password" name="overseerr_api_key" placeholder="(unchanged)"
+        <input type="password" name="seerr_api_key" placeholder="(unchanged)"
                class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
         <p class="text-xs text-zinc-500 mt-1">Your Seerr API key. Find it in Settings &gt; General &gt; API Key. Leave empty to keep the current saved key.</p>
     </div>
-    <button type="button" onclick="testConnection('overseerr')"
+    <button type="button" onclick="testConnection('seerr')"
             class="rounded-md px-3 py-1.5 text-sm font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent">Test Connection</button>
 </div>
 
@@ -372,7 +372,7 @@
         e.preventDefault();
         const formData = new FormData(e.target);
         const updates = {};
-        const allKeys = ['overseerr_url', 'overseerr_public_url', 'overseerr_api_key'];
+        const allKeys = ['seerr_url', 'seerr_public_url', 'seerr_api_key'];
         for (const key of allKeys) {
             if (sensitiveKeys.has(key)) {
                 const val = formData.get(key);

@@ -28,7 +28,7 @@ import (
 	"github.com/rinseaid/reclaimer/internal/rules"
 	"github.com/rinseaid/reclaimer/internal/services/httpclient"
 	"github.com/rinseaid/reclaimer/internal/services/jellyfin"
-	"github.com/rinseaid/reclaimer/internal/services/overseerr"
+	"github.com/rinseaid/reclaimer/internal/services/seerr"
 	"github.com/rinseaid/reclaimer/internal/services/plex"
 	"github.com/rinseaid/reclaimer/internal/services/radarr"
 	"github.com/rinseaid/reclaimer/internal/services/ratings"
@@ -165,8 +165,8 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 	jfKey := o.Config.GetString("jellyfin_api_key")
 	jfMoviesSection := o.Config.GetString("jellyfin_movies_section")
 	jfTVSection := o.Config.GetString("jellyfin_tv_section")
-	overseerrURL := o.Config.GetString("overseerr_url")
-	overseerrKey := o.Config.GetString("overseerr_api_key")
+	seerrURL := o.Config.GetString("seerr_url")
+	seerrKey := o.Config.GetString("seerr_api_key")
 
 	// Concurrent data fetches.
 	var (
@@ -174,7 +174,7 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 		plexTV          []map[string]any
 		radarrMovies    map[int]map[string]any
 		sonarrShows     map[int]map[string]any
-		requestData     *overseerr.RequestData
+		requestData     *seerr.RequestData
 		fetchWG         sync.WaitGroup
 		plexMoviesErr   error
 		plexTVErr       error
@@ -224,10 +224,10 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 
 	go func() {
 		defer fetchWG.Done()
-		defer recoverGoroutine("overseerr")
+		defer recoverGoroutine("seerr")
 		protectedCSV := o.Config.GetString("protected_requesters")
 		protectedSet := parseCSVSet(protectedCSV)
-		requestData, requestErr = overseerr.FetchActiveRequests(overseerrURL, overseerrKey, protectedSet)
+		requestData, requestErr = seerr.FetchActiveRequests(seerrURL, seerrKey, protectedSet)
 	}()
 
 	fetchWG.Wait()
@@ -254,7 +254,7 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 		sonarrShows = make(map[int]map[string]any)
 	}
 	if requestData == nil {
-		requestData = &overseerr.RequestData{
+		requestData = &seerr.RequestData{
 			ActiveMovies:       make(map[int]bool),
 			ActiveShows:        make(map[int]bool),
 			ActiveShowsTmdb:    make(map[int]bool),
@@ -314,7 +314,7 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 	addedAtByKey := o.buildAddedAtByKey(plexMovies, plexTV)
 	plexFavoritedKeys := o.fetchFavoritedKeys(plexMovies, plexTV, plex_url, plex_token, moviesSection, tvSection)
 	watchlistKeys := o.resolveWatchlistKeys(plexMovies, plexTV, radarrMovies, sonarrShows,
-		plex_url, plex_token, overseerrURL, overseerrKey, jfURL, jfKey, jfMoviesSection, jfTVSection)
+		plex_url, plex_token, seerrURL, seerrKey, jfURL, jfKey, jfMoviesSection, jfTVSection)
 	partialKeys, partialTitles, partialSeasons := o.aggregatePartialWatches()
 	maxPercentByKey, maxPercentByTitle, maxPercentBySeason := o.aggregateMaxPercent()
 	showSeasonCounts := sonarr.BuildSeasonCounts(sonarrShows)
@@ -323,8 +323,8 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 	movieCtx := &rules.EvaluationContext{
 		PlayCounts:               playCounts,
 		RadarrMovies:             radarrMovies,
-		OverseerrActiveMovies:    requestData.ActiveMovies,
-		OverseerrProtectedMovies: requestData.ProtectedMovies,
+		SeerrActiveMovies:    requestData.ActiveMovies,
+		SeerrProtectedMovies: requestData.ProtectedMovies,
 		PlexKeepKeys:             moviesKeep,
 		DBPlays:                  dbPlays,
 		DBPlaysByTitle:           dbPlaysByTitle,
@@ -345,10 +345,10 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 		MaxPercentBySeason:       maxPercentBySeason,
 		// Initialized empty -- not used for movies.
 		SonarrShows:                 make(map[int]map[string]any),
-		OverseerrActiveShows:        make(map[int]bool),
-		OverseerrActiveShowsTmdb:    make(map[int]bool),
-		OverseerrProtectedShows:     make(map[int]bool),
-		OverseerrProtectedShowsTmdb: make(map[int]bool),
+		SeerrActiveShows:        make(map[int]bool),
+		SeerrActiveShowsTmdb:    make(map[int]bool),
+		SeerrProtectedShows:     make(map[int]bool),
+		SeerrProtectedShowsTmdb: make(map[int]bool),
 		ShowRequesters:              make(map[int]string),
 		ShowRequestersTmdb:          make(map[int]string),
 		DebridCached:                make(map[string]bool),
@@ -361,10 +361,10 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 	tvCtx := &rules.EvaluationContext{
 		PlayCounts:                  playCounts,
 		SonarrShows:                 sonarrShows,
-		OverseerrActiveShows:        requestData.ActiveShows,
-		OverseerrActiveShowsTmdb:    requestData.ActiveShowsTmdb,
-		OverseerrProtectedShows:     requestData.ProtectedShows,
-		OverseerrProtectedShowsTmdb: requestData.ProtectedShowsTmdb,
+		SeerrActiveShows:        requestData.ActiveShows,
+		SeerrActiveShowsTmdb:    requestData.ActiveShowsTmdb,
+		SeerrProtectedShows:     requestData.ProtectedShows,
+		SeerrProtectedShowsTmdb: requestData.ProtectedShowsTmdb,
 		PlexKeepKeys:                tvKeep,
 		DBPlays:                     dbPlays,
 		DBPlaysByTitle:              dbPlaysByTitle,
@@ -390,8 +390,8 @@ func (o *Orchestrator) Run(dryRun bool, ruleFilter string) error {
 		ShowLevelProtectionKeys:     make(map[string]bool),
 		// Initialized empty -- not used for TV.
 		RadarrMovies:             make(map[int]map[string]any),
-		OverseerrActiveMovies:    make(map[int]bool),
-		OverseerrProtectedMovies: make(map[int]bool),
+		SeerrActiveMovies:    make(map[int]bool),
+		SeerrProtectedMovies: make(map[int]bool),
 		MovieRequesters:          make(map[int]string),
 		DebridCached:             make(map[string]bool),
 	}
@@ -1145,12 +1145,12 @@ func (o *Orchestrator) resolveWatchlistKeys(
 	plexMovies, plexTV []map[string]any,
 	radarrMovies map[int]map[string]any,
 	sonarrShows map[int]map[string]any,
-	plexURL, plexToken, overseerrURL, overseerrKey string,
+	plexURL, plexToken, seerrURL, seerrKey string,
 	jfURL, jfKey, jfMoviesSection, jfTVSection string,
 ) map[string]bool {
 	watchlistRKs := make(map[string]bool)
 
-	wlItems, err := overseerr.FetchAllWatchlists(overseerrURL, overseerrKey)
+	wlItems, err := seerr.FetchAllWatchlists(seerrURL, seerrKey)
 	if err != nil || len(wlItems) == 0 {
 		if err != nil {
 			slog.Warn("Seerr watchlist fetch failed", "error", err)
@@ -2373,15 +2373,15 @@ func computeShowLevelProtectionKeys(
 		}
 
 		// Active Seerr request.
-		if (tvdb != 0 && ctx.OverseerrActiveShows[tvdb]) ||
-			(tmdb != 0 && ctx.OverseerrActiveShowsTmdb[tmdb]) {
+		if (tvdb != 0 && ctx.SeerrActiveShows[tvdb]) ||
+			(tmdb != 0 && ctx.SeerrActiveShowsTmdb[tmdb]) {
 			protected[rk] = true
 			continue
 		}
 
 		// Protected-user request.
-		if (tvdb != 0 && ctx.OverseerrProtectedShows[tvdb]) ||
-			(tmdb != 0 && ctx.OverseerrProtectedShowsTmdb[tmdb]) {
+		if (tvdb != 0 && ctx.SeerrProtectedShows[tvdb]) ||
+			(tmdb != 0 && ctx.SeerrProtectedShowsTmdb[tmdb]) {
 			protected[rk] = true
 			continue
 		}

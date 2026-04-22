@@ -8,19 +8,19 @@ import (
 	"time"
 
 	"github.com/rinseaid/reclaimer/internal/models"
-	"github.com/rinseaid/reclaimer/internal/services/overseerr"
+	"github.com/rinseaid/reclaimer/internal/services/seerr"
 )
 
 type EvaluationContext struct {
 	PlayCounts                  map[string]int
 	RadarrMovies                map[int]map[string]any
 	SonarrShows                 map[int]map[string]any
-	OverseerrActiveMovies       map[int]bool
-	OverseerrActiveShows        map[int]bool
-	OverseerrActiveShowsTmdb    map[int]bool
-	OverseerrProtectedMovies    map[int]bool
-	OverseerrProtectedShows     map[int]bool
-	OverseerrProtectedShowsTmdb map[int]bool
+	SeerrActiveMovies       map[int]bool
+	SeerrActiveShows        map[int]bool
+	SeerrActiveShowsTmdb    map[int]bool
+	SeerrProtectedMovies    map[int]bool
+	SeerrProtectedShows     map[int]bool
+	SeerrProtectedShowsTmdb map[int]bool
 	PlexKeepKeys                map[string]bool
 	DebridCached                map[string]bool
 	DBPlays                     map[string]int
@@ -53,12 +53,12 @@ func NewEvaluationContext() *EvaluationContext {
 		PlayCounts:                  make(map[string]int),
 		RadarrMovies:                make(map[int]map[string]any),
 		SonarrShows:                 make(map[int]map[string]any),
-		OverseerrActiveMovies:       make(map[int]bool),
-		OverseerrActiveShows:        make(map[int]bool),
-		OverseerrActiveShowsTmdb:    make(map[int]bool),
-		OverseerrProtectedMovies:    make(map[int]bool),
-		OverseerrProtectedShows:     make(map[int]bool),
-		OverseerrProtectedShowsTmdb: make(map[int]bool),
+		SeerrActiveMovies:       make(map[int]bool),
+		SeerrActiveShows:        make(map[int]bool),
+		SeerrActiveShowsTmdb:    make(map[int]bool),
+		SeerrProtectedMovies:    make(map[int]bool),
+		SeerrProtectedShows:     make(map[int]bool),
+		SeerrProtectedShowsTmdb: make(map[int]bool),
 		PlexKeepKeys:                make(map[string]bool),
 		DebridCached:                make(map[string]bool),
 		DBPlays:                     make(map[string]int),
@@ -154,7 +154,7 @@ func EvaluateMovie(item map[string]any, ctx *EvaluationContext, criteria *models
 
 	// 4. No active request
 	if criteria.IsRuleEnabled("no_active_request") {
-		if tmdb != 0 && ctx.OverseerrActiveMovies[tmdb] {
+		if tmdb != 0 && ctx.SeerrActiveMovies[tmdb] {
 			requester := ctx.MovieRequesters[tmdb]
 			if requester != "" && userHasWatched(ctx.UserWatches, requester, rk) {
 				results = append(results, Result{"no_active_request", true,
@@ -171,7 +171,7 @@ func EvaluateMovie(item map[string]any, ctx *EvaluationContext, criteria *models
 			var tagRequesters []string
 			if tmdb != 0 {
 				if movieData, ok := ctx.RadarrMovies[tmdb]; ok {
-					tagRequesters = overseerr.ExtractRequestersFromTags(toStringSlice(movieData["_tag_names"]))
+					tagRequesters = seerr.ExtractRequestersFromTags(toStringSlice(movieData["_tag_names"]))
 				}
 			}
 			if len(tagRequesters) > 0 {
@@ -191,7 +191,7 @@ func EvaluateMovie(item map[string]any, ctx *EvaluationContext, criteria *models
 
 	// 5. No protected request
 	if criteria.IsRuleEnabled("no_protected_request") {
-		if tmdb != 0 && ctx.OverseerrProtectedMovies[tmdb] {
+		if tmdb != 0 && ctx.SeerrProtectedMovies[tmdb] {
 			results = append(results, Result{"no_protected_request", false,
 				"Requested by a protected user", "blocking"})
 		} else {
@@ -264,7 +264,7 @@ func EvaluateMovie(item map[string]any, ctx *EvaluationContext, criteria *models
 		}
 		if requester == "" && tmdb != 0 {
 			if movieData, ok := ctx.RadarrMovies[tmdb]; ok {
-				tagReqs := overseerr.ExtractRequestersFromTags(toStringSlice(movieData["_tag_names"]))
+				tagReqs := seerr.ExtractRequestersFromTags(toStringSlice(movieData["_tag_names"]))
 				if len(tagReqs) > 0 {
 					requester = tagReqs[0]
 					source = "Radarr tag"
@@ -551,10 +551,10 @@ func EvaluateShow(item map[string]any, ctx *EvaluationContext, criteria *models.
 	if criteria.IsRuleEnabled("no_active_request") {
 		hasRequest := false
 		requester := ""
-		if tvdb != 0 && ctx.OverseerrActiveShows[tvdb] {
+		if tvdb != 0 && ctx.SeerrActiveShows[tvdb] {
 			hasRequest = true
 			requester = ctx.ShowRequesters[tvdb]
-		} else if tmdb != 0 && ctx.OverseerrActiveShowsTmdb[tmdb] {
+		} else if tmdb != 0 && ctx.SeerrActiveShowsTmdb[tmdb] {
 			hasRequest = true
 			requester = ctx.ShowRequestersTmdb[tmdb]
 		}
@@ -576,7 +576,7 @@ func EvaluateShow(item map[string]any, ctx *EvaluationContext, criteria *models.
 			var tagRequesters []string
 			if tvdb != 0 {
 				if showData, ok := ctx.SonarrShows[tvdb]; ok {
-					tagRequesters = overseerr.ExtractRequestersFromTags(toStringSlice(showData["_tag_names"]))
+					tagRequesters = seerr.ExtractRequestersFromTags(toStringSlice(showData["_tag_names"]))
 				}
 			}
 			if len(tagRequesters) > 0 {
@@ -598,8 +598,8 @@ func EvaluateShow(item map[string]any, ctx *EvaluationContext, criteria *models.
 
 	// 4. No protected request
 	if criteria.IsRuleEnabled("no_protected_request") {
-		if (tvdb != 0 && ctx.OverseerrProtectedShows[tvdb]) ||
-			(tmdb != 0 && ctx.OverseerrProtectedShowsTmdb[tmdb]) {
+		if (tvdb != 0 && ctx.SeerrProtectedShows[tvdb]) ||
+			(tmdb != 0 && ctx.SeerrProtectedShowsTmdb[tmdb]) {
 			results = append(results, Result{"no_protected_request", false,
 				"Requested by a protected user", "blocking"})
 		} else {
@@ -715,7 +715,7 @@ func EvaluateShow(item map[string]any, ctx *EvaluationContext, criteria *models.
 		}
 		if requester == "" && tvdb != 0 {
 			if showData, ok := ctx.SonarrShows[tvdb]; ok {
-				tagReqs := overseerr.ExtractRequestersFromTags(toStringSlice(showData["_tag_names"]))
+				tagReqs := seerr.ExtractRequestersFromTags(toStringSlice(showData["_tag_names"]))
 				if len(tagReqs) > 0 {
 					requester = tagReqs[0]
 					source = "Sonarr tag"
@@ -1018,10 +1018,10 @@ func EvaluateSeason(item map[string]any, ctx *EvaluationContext, criteria *model
 	if criteria.IsRuleEnabled("no_active_request") {
 		hasRequest := false
 		requester := ""
-		if tvdb != 0 && ctx.OverseerrActiveShows[tvdb] {
+		if tvdb != 0 && ctx.SeerrActiveShows[tvdb] {
 			hasRequest = true
 			requester = ctx.ShowRequesters[tvdb]
-		} else if tmdb != 0 && ctx.OverseerrActiveShowsTmdb[tmdb] {
+		} else if tmdb != 0 && ctx.SeerrActiveShowsTmdb[tmdb] {
 			hasRequest = true
 			requester = ctx.ShowRequestersTmdb[tmdb]
 		}
@@ -1043,7 +1043,7 @@ func EvaluateSeason(item map[string]any, ctx *EvaluationContext, criteria *model
 			var tagRequesters []string
 			if tvdb != 0 {
 				if showData, ok := ctx.SonarrShows[tvdb]; ok {
-					tagRequesters = overseerr.ExtractRequestersFromTags(toStringSlice(showData["_tag_names"]))
+					tagRequesters = seerr.ExtractRequestersFromTags(toStringSlice(showData["_tag_names"]))
 				}
 			}
 			if len(tagRequesters) > 0 {
@@ -1065,8 +1065,8 @@ func EvaluateSeason(item map[string]any, ctx *EvaluationContext, criteria *model
 
 	// 4. No protected request (show-level request, season-level watch)
 	if criteria.IsRuleEnabled("no_protected_request") {
-		if (tvdb != 0 && ctx.OverseerrProtectedShows[tvdb]) ||
-			(tmdb != 0 && ctx.OverseerrProtectedShowsTmdb[tmdb]) {
+		if (tvdb != 0 && ctx.SeerrProtectedShows[tvdb]) ||
+			(tmdb != 0 && ctx.SeerrProtectedShowsTmdb[tmdb]) {
 			results = append(results, Result{"no_protected_request", false,
 				"Requested by a protected user", "blocking"})
 		} else {
