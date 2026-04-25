@@ -31,7 +31,12 @@
 <!-- OIDC -->
 <div class="bg-zinc-900 rounded-lg p-6 border border-zinc-800 mb-6">
     <div class="flex items-center justify-between mb-2">
-        <h3 class="text-lg font-semibold text-zinc-100">OIDC / SSO</h3>
+        <div class="flex items-center gap-3">
+            <h3 class="text-lg font-semibold text-zinc-100">OIDC / SSO</h3>
+            <button type="button" id="oidc-toggle-details" onclick="document.getElementById('oidc-details').classList.toggle('hidden'); this.querySelector('svg').classList.toggle('rotate-180')" class="text-zinc-500 hover:text-zinc-300 transition-colors">
+                <svg class="w-4 h-4 transition-transform" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+            </button>
+        </div>
         <label class="flex items-center gap-2 cursor-pointer">
             <input type="checkbox" id="toggle-oidc" class="w-4 h-4 rounded accent-indigo-500" onchange="toggleProvider('viewer_oidc_enabled', this.checked)">
             <span class="text-sm text-zinc-400">Enabled</span>
@@ -39,6 +44,7 @@
     </div>
     <p class="text-xs text-zinc-500 mb-4">Authenticate via any OpenID Connect provider (Authelia, Authentik, Keycloak, etc.)</p>
 
+    <div id="oidc-details" class="hidden">
     <form id="oidc-form" class="space-y-4">
         <div>
             <label class="block text-sm font-medium text-zinc-300 mb-1">Display Name</label>
@@ -75,9 +81,22 @@
                    class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
             <p class="text-xs text-zinc-500 mt-1">Space-separated OIDC scopes. Defaults to "openid profile email".</p>
         </div>
+        <div>
+            <label class="block text-sm font-medium text-zinc-300 mb-1">Group Claim</label>
+            <input type="text" name="viewer_oidc_group_claim" placeholder="groups"
+                   class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+            <p class="text-xs text-zinc-500 mt-1">The ID token claim that contains group memberships. Defaults to "groups".</p>
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-zinc-300 mb-1">Admin Groups</label>
+            <input type="text" name="viewer_oidc_admin_groups" placeholder="reclaimer-admins"
+                   class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+            <p class="text-xs text-zinc-500 mt-1">Comma-separated list of groups that grant admin access. Leave empty to disable group-based admin.</p>
+        </div>
         <button type="submit" id="oidc-save-btn"
                 class="rounded-md px-3 py-1.5 text-sm font-medium bg-indigo-500 hover:bg-indigo-400 text-white">Save OIDC Settings</button>
     </form>
+    </div>
 </div>
 
 <!-- Local Auth -->
@@ -145,7 +164,7 @@
             }
 
             // OIDC fields
-            const oidcKeys = ['viewer_oidc_display_name', 'viewer_oidc_issuer_url', 'viewer_oidc_client_id', 'viewer_oidc_redirect_uri', 'viewer_oidc_scopes'];
+            const oidcKeys = ['viewer_oidc_display_name', 'viewer_oidc_issuer_url', 'viewer_oidc_client_id', 'viewer_oidc_redirect_uri', 'viewer_oidc_scopes', 'viewer_oidc_group_claim', 'viewer_oidc_admin_groups'];
             for (const key of oidcKeys) {
                 const el = document.querySelector(`[name="${key}"]`);
                 if (el && data[key]) el.value = data[key];
@@ -165,7 +184,7 @@
         e.preventDefault();
         const formData = new FormData(e.target);
         const updates = {};
-        const oidcKeys = ['viewer_oidc_display_name', 'viewer_oidc_issuer_url', 'viewer_oidc_client_id', 'viewer_oidc_client_secret', 'viewer_oidc_redirect_uri', 'viewer_oidc_scopes'];
+        const oidcKeys = ['viewer_oidc_display_name', 'viewer_oidc_issuer_url', 'viewer_oidc_client_id', 'viewer_oidc_client_secret', 'viewer_oidc_redirect_uri', 'viewer_oidc_scopes', 'viewer_oidc_group_claim', 'viewer_oidc_admin_groups'];
         for (const key of oidcKeys) {
             if (sensitiveKeys.has(key)) {
                 const val = formData.get(key);

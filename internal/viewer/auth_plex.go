@@ -4,15 +4,26 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"net/url"
 	"strings"
 
-	"github.com/go-chi/chi/v5"
 	"github.com/rinseaid/reclaimer/internal/services/httpclient"
 )
 
 const plexClientID = "reclaimer-viewer"
 
-func (s *Server) handlePlexPin(w http.ResponseWriter, r *http.Request) {
+func (s *Server) baseURL(r *http.Request) string {
+	if base := s.Config.GetString("leaving_base_url"); base != "" {
+		return strings.TrimRight(base, "/")
+	}
+	scheme := "http"
+	if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+		scheme = "https"
+	}
+	return scheme + "://" + r.Host
+}
+
+func (s *Server) handlePlexRedirect(w http.ResponseWriter, r *http.Request) {
 	body := strings.NewReader("strong=true")
 	req, _ := http.NewRequestWithContext(r.Context(), "POST", "https://plex.tv/api/v2/pins", body)
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
@@ -22,7 +33,7 @@ func (s *Server) handlePlexPin(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := httpclient.Client().Do(req)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		http.Error(w, "failed to create Plex PIN", http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
@@ -33,19 +44,21 @@ func (s *Server) handlePlexPin(w http.ResponseWriter, r *http.Request) {
 	}
 	json.NewDecoder(resp.Body).Decode(&pin)
 
-	authURL := fmt.Sprintf(
-		"https://app.plex.tv/auth#?clientID=%s&code=%s&context%%5Bdevice%%5D%%5Bproduct%%5D=Reclaimer",
-		plexClientID, pin.Code)
+	callbackURL := fmt.Sprintf("/auth/plex/callback?pin_id=%d", pin.ID)
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"pin_id":   pin.ID,
-		"code":     pin.Code,
-		"auth_url": authURL,
-	})
+	authURL := fmt.Sprintf(
+		"https://app.plex.tv/auth#?clientID=%s&code=%s&context%%5Bdevice%%5D%%5Bproduct%%5D=Reclaimer&forwardUrl=%s",
+		plexClientID, pin.Code, url.QueryEscape(s.baseURL(r)+callbackURL))
+
+	http.Redirect(w, r, authURL, http.StatusFound)
 }
 
-func (s *Server) handlePlexPinCheck(w http.ResponseWriter, r *http.Request) {
-	pinID := chi.URLParam(r, "pinId")
+func (s *Server) handlePlexCallback(w http.ResponseWriter, r *http.Request) {
+	pinID := r.URL.Query().Get("pin_id")
+	if pinID == "" {
+		http.Error(w, "missing pin_id", http.StatusBadRequest)
+		return
+	}
 
 	req, _ := http.NewRequestWithContext(r.Context(), "GET",
 		fmt.Sprintf("https://plex.tv/api/v2/pins/%s", pinID), nil)
@@ -54,7 +67,7 @@ func (s *Server) handlePlexPinCheck(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := httpclient.Client().Do(req)
 	if err != nil {
-		writeJSON(w, http.StatusBadGateway, map[string]string{"error": err.Error()})
+		http.Error(w, "failed to check Plex PIN", http.StatusBadGateway)
 		return
 	}
 	defer resp.Body.Close()
@@ -65,32 +78,33 @@ func (s *Server) handlePlexPinCheck(w http.ResponseWriter, r *http.Request) {
 	json.NewDecoder(resp.Body).Decode(&pin)
 
 	if pin.AuthToken == "" {
-		writeJSON(w, http.StatusOK, map[string]any{"waiting": true})
+		http.Error(w, "Plex authentication was not completed", http.StatusUnauthorized)
 		return
 	}
 
-	// Fetch user info from Plex
 	user, err := s.plexUserFromToken(r, pin.AuthToken)
 	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": err.Error()})
+		http.Error(w, "failed to get Plex user info", http.StatusUnauthorized)
 		return
 	}
 
 	viewerUser, err := s.findOrCreateViewerUser(*user)
 	if err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create user"})
+		http.Error(w, "failed to create user", http.StatusInternalServerError)
 		return
+	}
+
+	if !s.hasAnyAdmins() && !viewerUser.IsAdmin {
+		s.DB.Exec(s.DB.Rebind("UPDATE viewer_users SET is_admin = 1 WHERE id = ?"), viewerUser.ID)
+		viewerUser.IsAdmin = true
 	}
 
 	if err := s.createSession(w, r, viewerUser.ID); err != nil {
-		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create session"})
+		http.Error(w, "failed to create session", http.StatusInternalServerError)
 		return
 	}
 
-	writeJSON(w, http.StatusOK, map[string]any{
-		"waiting": false,
-		"user":    viewerUser,
-	})
+	http.Redirect(w, r, "/", http.StatusSeeOther)
 }
 
 func (s *Server) plexUserFromToken(r *http.Request, authToken string) (*ExternalIdentity, error) {

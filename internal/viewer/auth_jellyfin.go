@@ -76,6 +76,11 @@ func (s *Server) handleJellyfinLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !s.hasAnyAdmins() && !viewerUser.IsAdmin {
+		s.DB.Exec(s.DB.Rebind("UPDATE viewer_users SET is_admin = 1 WHERE id = ?"), viewerUser.ID)
+		viewerUser.IsAdmin = true
+	}
+
 	if err := s.createSession(w, r, viewerUser.ID); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create session"})
 		return
