@@ -91,7 +91,8 @@ func (s *Server) handleLeavingItems(w http.ResponseWriter, r *http.Request) {
 	err := s.DB.Select(&items, `
 		SELECT rating_key, collection, title, media_type,
 		       COALESCE(size_bytes, 0) as size_bytes, grace_expires,
-		       first_seen, override, tmdb_id, show_rating_key, season_number
+		       first_seen, override, tmdb_id, show_rating_key, season_number,
+		       genre, content_rating, year
 		FROM items
 		WHERE status = 'staged'
 		ORDER BY grace_expires ASC`)
@@ -123,6 +124,15 @@ func (s *Server) handleLeavingItems(w http.ResponseWriter, r *http.Request) {
 		}
 		if it.SeasonNumber.Valid {
 			m["season_number"] = it.SeasonNumber.Int64
+		}
+		if it.Genre.Valid {
+			m["genre"] = it.Genre.String
+		}
+		if it.ContentRating.Valid {
+			m["content_rating"] = it.ContentRating.String
+		}
+		if it.Year.Valid {
+			m["year"] = it.Year.Int64
 		}
 		out = append(out, m)
 	}

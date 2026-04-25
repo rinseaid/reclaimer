@@ -22,9 +22,23 @@
 </div>
 
 <!-- Filter chips -->
-<div id="filter-bar" class="flex flex-wrap items-center gap-2 mb-5">
-    <span class="text-xs text-zinc-500 mr-1">Collection:</span>
-    <div id="collection-chips" class="flex flex-wrap gap-1.5"></div>
+<div id="filter-bar" class="space-y-2 mb-5">
+    <div id="collection-filter" class="flex flex-wrap items-center gap-2">
+        <span class="text-xs text-zinc-500 mr-1 w-16 shrink-0">Collection:</span>
+        <div id="collection-chips" class="flex flex-wrap gap-1.5"></div>
+    </div>
+    <div id="genre-filter" class="flex flex-wrap items-center gap-2">
+        <span class="text-xs text-zinc-500 mr-1 w-16 shrink-0">Genre:</span>
+        <div id="genre-chips" class="flex flex-wrap gap-1.5"></div>
+    </div>
+    <div id="rating-filter" class="flex flex-wrap items-center gap-2">
+        <span class="text-xs text-zinc-500 mr-1 w-16 shrink-0">Rating:</span>
+        <div id="rating-chips" class="flex flex-wrap gap-1.5"></div>
+    </div>
+    <div id="year-filter" class="flex flex-wrap items-center gap-2">
+        <span class="text-xs text-zinc-500 mr-1 w-16 shrink-0">Decade:</span>
+        <div id="year-chips" class="flex flex-wrap gap-1.5"></div>
+    </div>
 </div>
 
 <!-- Stats bar -->
@@ -42,7 +56,7 @@
 </div>
 
 <!-- Poster grid -->
-<div id="items-grid" class="hidden grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4"></div>
+<div id="items-grid" class="hidden grid grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-7 xl:grid-cols-8 2xl:grid-cols-10 gap-3"></div>
 
 <!-- TV show drilldown modal -->
 <div id="show-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onclick="if(event.target===this)closeShowModal()">
@@ -68,6 +82,9 @@
     let allItems = [];
     let activeCategory = 'all';
     let activeCollections = new Set();
+    let activeGenres = new Set();
+    let activeRatings = new Set();
+    let activeDecades = new Set();
     let searchQuery = '';
 
     function formatSize(bytes) {
@@ -87,9 +104,9 @@
 
     function urgencyBadge(dateStr) {
         const diff = Math.ceil((new Date(dateStr) - new Date()) / 86400000);
-        if (diff <= 3) return 'bg-red-600 text-white';
-        if (diff <= 7) return 'bg-amber-500 text-black';
-        return 'bg-zinc-900/90 text-zinc-200';
+        if (diff <= 3) return 'badge-urgent';
+        if (diff <= 7) return 'badge-warn';
+        return 'badge-normal';
     }
 
     function escapeHtml(s) {
@@ -125,11 +142,29 @@
         .catch(() => { btn.textContent = 'Keep'; btn.disabled = false; });
     }
 
+    function itemGenres(item) {
+        return (item.genre || '').split(',').map(g => g.trim()).filter(Boolean);
+    }
+
+    function itemDecade(item) {
+        if (!item.year) return null;
+        return Math.floor(item.year / 10) * 10;
+    }
+
     function getFiltered() {
         return allItems.filter(item => {
             if (activeCategory === 'movie' && item.media_type !== 'movie') return false;
             if (activeCategory === 'tv' && item.media_type === 'movie') return false;
             if (activeCollections.size > 0 && !activeCollections.has(item.collection)) return false;
+            if (activeGenres.size > 0) {
+                const genres = itemGenres(item);
+                if (!genres.some(g => activeGenres.has(g))) return false;
+            }
+            if (activeRatings.size > 0 && !activeRatings.has(item.content_rating || '')) return false;
+            if (activeDecades.size > 0) {
+                const d = itemDecade(item);
+                if (d === null || !activeDecades.has(d)) return false;
+            }
             if (searchQuery) {
                 const q = searchQuery.toLowerCase();
                 const title = (item.title || '').toLowerCase();
@@ -189,9 +224,9 @@
                 ${isKept ? '<div class="absolute top-2 left-2"><span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-500/80 text-white">Kept</span></div>' : ''}
             </div>
             <div class="card-body">
-                <div class="text-sm font-medium text-zinc-100 truncate" title="${escapeAttr(item.title)}">${title}</div>
-                <div class="text-xs text-zinc-500 truncate mt-0.5">${escapeHtml(item.collection)}</div>
-                ${!isKept ? `<button data-rk="${escapeAttr(rk)}" class="keep-btn w-full mt-2 px-3 py-1.5 rounded-md text-xs font-medium bg-emerald-600 hover:bg-emerald-500 text-white transition-colors cursor-pointer">Keep</button>` : ''}
+                <div class="text-xs font-medium text-zinc-100 truncate" title="${escapeAttr(item.title)}">${title}</div>
+                <div class="text-[10px] text-zinc-500 truncate mt-0.5">${escapeHtml(item.collection)}</div>
+                ${!isKept ? `<button data-rk="${escapeAttr(rk)}" class="keep-btn w-full mt-1.5 px-2 py-1 rounded text-[10px] font-medium bg-emerald-600 hover:bg-emerald-500 text-white transition-colors cursor-pointer">Keep</button>` : ''}
             </div>
         `;
         const btn = card.querySelector('.keep-btn');
@@ -226,8 +261,8 @@
                 ${show.any_kept ? '<div class="absolute top-2 left-2"><span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-500/80 text-white">Kept</span></div>' : ''}
             </div>
             <div class="card-body">
-                <div class="text-sm font-medium text-zinc-100 truncate" title="${escapeAttr(show.title)}">${title}</div>
-                <div class="text-xs text-zinc-500 truncate mt-0.5">${escapeHtml(show.collection)}</div>
+                <div class="text-xs font-medium text-zinc-100 truncate" title="${escapeAttr(show.title)}">${title}</div>
+                <div class="text-[10px] text-zinc-500 truncate mt-0.5">${escapeHtml(show.collection)}</div>
             </div>
         `;
         return card;
@@ -348,7 +383,25 @@
         }, 200);
     });
 
-    // Load items
+    function buildChips(container, values, activeSet) {
+        values.forEach(val => {
+            const chip = document.createElement('button');
+            chip.className = 'filter-chip';
+            chip.textContent = typeof val === 'number' ? val + 's' : val;
+            chip.addEventListener('click', () => {
+                if (activeSet.has(val)) {
+                    activeSet.delete(val);
+                    chip.classList.remove('active');
+                } else {
+                    activeSet.add(val);
+                    chip.classList.add('active');
+                }
+                render();
+            });
+            container.appendChild(chip);
+        });
+    }
+
     fetch('/leaving/items')
         .then(r => r.json())
         .then(data => {
@@ -356,28 +409,26 @@
             allItems = data.items || [];
             if (allItems.length === 0) { empty.classList.remove('hidden'); return; }
 
-            // Build collection chips
             const collections = [...new Set(allItems.map(i => i.collection))].sort();
-            collections.forEach(col => {
-                const chip = document.createElement('button');
-                chip.className = 'filter-chip';
-                chip.textContent = col;
-                chip.addEventListener('click', () => {
-                    if (activeCollections.has(col)) {
-                        activeCollections.delete(col);
-                        chip.classList.remove('active');
-                    } else {
-                        activeCollections.add(col);
-                        chip.classList.add('active');
-                    }
-                    render();
-                });
-                collectionChips.appendChild(chip);
-            });
+            buildChips(collectionChips, collections, activeCollections);
+            if (collections.length <= 1) document.getElementById('collection-filter').classList.add('hidden');
 
-            if (collections.length <= 1) {
-                document.getElementById('filter-bar').classList.add('hidden');
-            }
+            const genreSet = new Set();
+            allItems.forEach(i => itemGenres(i).forEach(g => genreSet.add(g)));
+            const genres = [...genreSet].sort();
+            buildChips(document.getElementById('genre-chips'), genres, activeGenres);
+            if (genres.length <= 1) document.getElementById('genre-filter').classList.add('hidden');
+
+            const ratings = [...new Set(allItems.map(i => i.content_rating).filter(Boolean))].sort();
+            buildChips(document.getElementById('rating-chips'), ratings, activeRatings);
+            if (ratings.length <= 1) document.getElementById('rating-filter').classList.add('hidden');
+
+            const decades = [...new Set(allItems.map(i => itemDecade(i)).filter(d => d !== null))].sort();
+            buildChips(document.getElementById('year-chips'), decades, activeDecades);
+            if (decades.length <= 1) document.getElementById('year-filter').classList.add('hidden');
+
+            const anyFilters = collections.length > 1 || genres.length > 1 || ratings.length > 1 || decades.length > 1;
+            if (!anyFilters) document.getElementById('filter-bar').classList.add('hidden');
 
             render();
         })

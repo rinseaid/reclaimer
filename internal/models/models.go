@@ -90,6 +90,9 @@ type Item struct {
 	ArrID          NullInt64  `db:"arr_id" json:"arr_id"`
 	SeasonNumber   NullInt64  `db:"season_number" json:"season_number"`
 	ShowRatingKey  NullString `db:"show_rating_key" json:"show_rating_key"`
+	Genre          NullString `db:"genre" json:"genre"`
+	ContentRating  NullString `db:"content_rating" json:"content_rating"`
+	Year           NullInt64  `db:"year" json:"year"`
 	SizeBytes      int64          `db:"size_bytes" json:"size_bytes"`
 	FirstSeen      string         `db:"first_seen" json:"first_seen"`
 	LastSeen       string         `db:"last_seen" json:"last_seen"`

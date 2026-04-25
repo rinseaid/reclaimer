@@ -1572,6 +1572,19 @@ func (o *Orchestrator) processCollection(
 			showRatingKey = &srk
 		}
 
+		// Extract genre, content rating, year (works for both Plex and Jellyfin).
+		var genreStr, contentRating *string
+		var year *int64
+		if genres := extractGenres(item); genres != "" {
+			genreStr = &genres
+		}
+		if cr := extractContentRating(item); cr != "" {
+			contentRating = &cr
+		}
+		if y := extractYear(item); y > 0 {
+			year = &y
+		}
+
 		if !isNew {
 			// Update existing item. Preserve grace window unless circumstances
 			// require recomputation.
@@ -1598,29 +1611,33 @@ func (o *Orchestrator) processCollection(
 				o.DB.Exec(o.DB.Rebind(`
 					UPDATE items SET last_seen = ?, title = ?, tmdb_id = ?, tvdb_id = ?,
 					       imdb_id = ?, arr_id = ?, season_number = ?, show_rating_key = ?,
+					       genre = ?, content_rating = ?, year = ?,
 					       size_bytes = ?, status = ?, grace_expires = ?
 					WHERE id = ?`),
 					today, title, tmdbID, tvdbID, imdbIDPtr, arrID,
-					seasonNumber, showRatingKey, sizeBytes,
-					string(models.StatusStaged), graceDate, existingID)
+					seasonNumber, showRatingKey, genreStr, contentRating, year,
+					sizeBytes, string(models.StatusStaged), graceDate, existingID)
 			} else {
 				o.DB.Exec(o.DB.Rebind(`
 					UPDATE items SET last_seen = ?, title = ?, tmdb_id = ?, tvdb_id = ?,
 					       imdb_id = ?, arr_id = ?, season_number = ?, show_rating_key = ?,
+					       genre = ?, content_rating = ?, year = ?,
 					       size_bytes = ?, status = ?
 					WHERE id = ?`),
 					today, title, tmdbID, tvdbID, imdbIDPtr, arrID,
-					seasonNumber, showRatingKey, sizeBytes,
-					string(models.StatusStaged), existingID)
+					seasonNumber, showRatingKey, genreStr, contentRating, year,
+					sizeBytes, string(models.StatusStaged), existingID)
 			}
 		} else {
 			o.DB.Exec(o.DB.Rebind(`
 				INSERT INTO items (rating_key, collection, title, media_type, tmdb_id, tvdb_id,
-				       imdb_id, arr_id, season_number, show_rating_key, size_bytes,
+				       imdb_id, arr_id, season_number, show_rating_key,
+				       genre, content_rating, year, size_bytes,
 				       first_seen, last_seen, grace_expires, status)
-				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
+				VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`),
 				rk, collectionName, title, mediaType, tmdbID, tvdbID,
-				imdbIDPtr, arrID, seasonNumber, showRatingKey, sizeBytes,
+				imdbIDPtr, arrID, seasonNumber, showRatingKey,
+				genreStr, contentRating, year, sizeBytes,
 				today, today, graceDate, string(models.StatusStaged))
 
 			// Fire immediate pipeline steps.
@@ -2794,6 +2811,58 @@ func toStringSlice(v any) []string {
 		return out
 	}
 	return nil
+}
+
+// extractGenres returns a comma-separated genre string from either a Plex item
+// (Genre: [{tag: "Action"}, ...]) or a Jellyfin item (Genres: ["Action", ...]).
+func extractGenres(item map[string]any) string {
+	// Plex: Genre array of {tag: "..."} objects
+	if arr, ok := item["Genre"].([]any); ok && len(arr) > 0 {
+		var tags []string
+		for _, g := range arr {
+			if gm, ok := g.(map[string]any); ok {
+				if tag, _ := gm["tag"].(string); tag != "" {
+					tags = append(tags, tag)
+				}
+			}
+		}
+		return strings.Join(tags, ", ")
+	}
+	// Jellyfin: Genres array of strings
+	if arr, ok := item["Genres"].([]any); ok && len(arr) > 0 {
+		var tags []string
+		for _, g := range arr {
+			if s, ok := g.(string); ok && s != "" {
+				tags = append(tags, s)
+			}
+		}
+		return strings.Join(tags, ", ")
+	}
+	return ""
+}
+
+// extractContentRating returns the content rating from a Plex item
+// (contentRating: "PG-13") or Jellyfin item (OfficialRating: "PG-13").
+func extractContentRating(item map[string]any) string {
+	if cr, ok := item["contentRating"].(string); ok && cr != "" {
+		return cr
+	}
+	if cr, ok := item["OfficialRating"].(string); ok && cr != "" {
+		return cr
+	}
+	return ""
+}
+
+// extractYear returns the release year from a Plex item (year) or Jellyfin
+// item (ProductionYear).
+func extractYear(item map[string]any) int64 {
+	if y := toInt64(item["year"]); y > 0 {
+		return y
+	}
+	if y := toInt64(item["ProductionYear"]); y > 0 {
+		return y
+	}
+	return 0
 }
 
 // ---------------------------------------------------------------------------
