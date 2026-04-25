@@ -44,12 +44,6 @@ func (s *Server) LeavingRoutes() chi.Router {
 	return r
 }
 
-func (s *Server) hasLocalUsers() bool {
-	var count int
-	s.DB.Get(&count, "SELECT COUNT(*) FROM viewer_users WHERE auth_provider = 'local'")
-	return count > 0
-}
-
 func (s *Server) hasAnyAdmins() bool {
 	var count int
 	s.DB.Get(&count, "SELECT COUNT(*) FROM viewer_users WHERE is_admin = 1")
@@ -80,8 +74,7 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 			"display_name": s.Config.GetString("viewer_oidc_display_name"),
 		},
 		"local": map[string]any{
-			"enabled":   s.Config.GetBool("viewer_local_enabled"),
-			"has_users": s.hasLocalUsers(),
+			"enabled": s.Config.GetBool("viewer_local_enabled"),
 		},
 	})
 }
