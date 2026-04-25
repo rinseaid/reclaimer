@@ -195,7 +195,7 @@
     let _cachedInstances = [];
 
     function loadInstances() {
-        return fetch('/api/instances')
+        return fetch('/admin/api/instances')
             .then(r => r.json())
             .then(data => {
                 _cachedInstances = (data.instances || []);
@@ -255,7 +255,7 @@
         };
         const existingId = document.getElementById('modal-id').value;
         if (existingId) payload.instance_id = Number(existingId);
-        fetch('/api/instances/test', {
+        fetch('/admin/api/instances/test', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(payload),
@@ -299,13 +299,13 @@
         if (id) {
             const body = {name, url, public_url: publicUrl, is_default: isDefault};
             if (apiKey) body.api_key = apiKey;
-            req = fetch(`/api/instances/${id}`, {
+            req = fetch(`/admin/api/instances/${id}`, {
                 method: 'PATCH',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify(body),
             });
         } else {
-            req = fetch('/api/instances', {
+            req = fetch('/admin/api/instances', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 body: JSON.stringify({
@@ -332,7 +332,7 @@
 
     function deleteInstance(id, name) {
         if (!confirm(`Delete instance "${name}"? This cannot be undone.`)) return;
-        fetch(`/api/instances/${id}`, {method: 'DELETE'})
+        fetch(`/admin/api/instances/${id}`, {method: 'DELETE'})
             .then(r => {
                 if (!r.ok) return r.json().then(d => Promise.reject(new Error(d.detail || 'Server error')));
                 return r.json();
@@ -385,7 +385,7 @@
         btn.disabled = true;
         btn.textContent = 'Saving...';
         btn.classList.add('opacity-50', 'cursor-not-allowed');
-        fetch('/api/settings', {
+        fetch('/admin/api/settings', {
             method: 'PUT',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({settings: updates}),
@@ -413,7 +413,7 @@
         const keyInput = document.querySelector(`[name="${service}_api_key"]`);
         if (urlInput && urlInput.value) payload.url = urlInput.value;
         if (keyInput && keyInput.value) payload.api_key = keyInput.value;
-        fetch('/api/settings/test-connection', {
+        fetch('/admin/api/settings/test-connection', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify(payload),
@@ -431,7 +431,7 @@
         });
     };
 
-    fetch('/api/settings')
+    fetch('/admin/api/settings')
         .then(r => r.ok ? r.json() : Promise.reject(new Error('HTTP ' + r.status)))
         .then(settings => populateForm(settings))
         .catch(err => toast('Failed to load settings: ' + err.message, 'error'));

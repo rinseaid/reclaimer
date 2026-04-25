@@ -68,7 +68,7 @@
 <div class="flex items-center gap-3 mb-4 flex-wrap">
     <div id="rule-filter-bar" class="hidden text-sm items-center gap-2">
         <span class="inline-flex px-2 py-0.5 rounded-md text-xs font-semibold bg-sky-500/15 text-sky-400" id="rule-filter-badge"></span>
-        <a href="/logs" class="text-sky-400 hover:text-sky-300 text-sm">Clear filter</a>
+        <a href="/admin/logs" class="text-sky-400 hover:text-sky-300 text-sm">Clear filter</a>
     </div>
     <button id="col-filter-toggle" title="Toggle column filters" onclick="toggleColumnFilters()"
         class="bg-transparent rounded-md border border-zinc-600 text-zinc-400 hover:text-zinc-200 hover:border-zinc-500 px-2 py-1 cursor-pointer text-xs inline-flex items-center gap-1.5 transition-all duration-150">
@@ -261,7 +261,7 @@ if (ruleFilter) {
 
 // ── Fetch a batch from the API ──
 async function fetchBatch(offset, limit) {
-    let url = `/api/activity?page=${Math.floor(offset / limit) + 1}&per_page=${limit}`;
+    let url = `/admin/api/activity?page=${Math.floor(offset / limit) + 1}&per_page=${limit}`;
     if (ruleFilter) url += '&collection=' + encodeURIComponent(ruleFilter);
     const resp = await fetch(url);
     if (!resp.ok) throw new Error('HTTP ' + resp.status);
@@ -396,7 +396,7 @@ function renderAll() {
         const ruleText = a.collection || '';
         const titleText = a.title || '';
         const titleLink = (a.rating_key && titleText)
-            ? '<a href="/items/' + a.rating_key + '" class="text-sky-400 hover:text-sky-300">' + titleText + '</a>'
+            ? '<a href="/admin/items/' + a.rating_key + '" class="text-sky-400 hover:text-sky-300">' + titleText + '</a>'
             : titleText;
         const cls = indent ? 'gtable-row run-child' : 'gtable-row';
         const indentClass = indent ? ' pl-6' : '';
@@ -404,7 +404,7 @@ function renderAll() {
         row += '<div role="cell" data-col="0" class="whitespace-nowrap text-zinc-100">' + fmtTime(a.timestamp) + '</div>';
         row += '<div role="cell" data-col="1">' + eventPill(a.event_type) + '</div>';
         const ruleSlug = ruleText ? ruleText.toLowerCase().replace(/ /g, '-') : '';
-        row += '<div role="cell" data-col="2">' + (ruleText ? '<a href="/rules/' + encodeURIComponent(ruleSlug) + '" class="text-sky-400 hover:text-sky-300">' + ruleText + '</a>' : '') + '</div>';
+        row += '<div role="cell" data-col="2">' + (ruleText ? '<a href="/admin/rules/' + encodeURIComponent(ruleSlug) + '" class="text-sky-400 hover:text-sky-300">' + ruleText + '</a>' : '') + '</div>';
         let detailHtml = '';
         if (titleLink && detail) {
             const rules = detail.split(/;\s*/);
@@ -590,7 +590,7 @@ function clearLogs() {
     const btn = document.getElementById('clear-logs-btn');
     btn.disabled = true;
     btn.textContent = 'Clearing...';
-    fetch('/api/activity', { method: 'DELETE' })
+    fetch('/admin/api/activity', { method: 'DELETE' })
         .then(r => r.json())
         .then(() => {
             btn.textContent = 'Clear Logs';

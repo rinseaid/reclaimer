@@ -5,34 +5,49 @@ import (
 	"net/http"
 )
 
-func (s *Server) handleLeavingPage(w http.ResponseWriter, r *http.Request) {
-	tmplDir := s.TemplateDir
-	if tmplDir == "" {
-		tmplDir = "/app/templates"
-	}
+// HandleViewerPage renders the viewer UI using base.html + viewer.html.
+func (s *Server) HandleViewerPage() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		tmplDir := s.TemplateDir
+		if tmplDir == "" {
+			tmplDir = "/app/templates"
+		}
 
-	user := UserFromContext(r.Context())
+		user := UserFromContext(r.Context())
+		displayName := user.Username
+		if user.DisplayName.Valid && user.DisplayName.String != "" {
+			displayName = user.DisplayName.String
+		}
 
-	displayName := user.Username
-	if user.DisplayName.Valid && user.DisplayName.String != "" {
-		displayName = user.DisplayName.String
-	}
+		t, err := template.ParseFiles(
+			tmplDir+"/viewer_base.html",
+			tmplDir+"/viewer.html",
+		)
+		if err != nil {
+			http.Error(w, err.Error(), http.StatusInternalServerError)
+			return
+		}
 
-	t, err := template.ParseFiles(
-		tmplDir+"/leaving_base.html",
-		tmplDir+"/leaving.html",
-	)
-	if err != nil {
-		http.Error(w, err.Error(), http.StatusInternalServerError)
-		return
+		data := map[string]any{
+			"Title":       "Leaving Soon",
+			"Path":        r.URL.Path,
+			"Username":    user.Username,
+			"DisplayName": displayName,
+			"IsAdmin":     user.IsAdmin,
+		}
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		t.ExecuteTemplate(w, "viewer_base.html", data)
 	}
+}
 
-	data := map[string]any{
-		"Username":    user.Username,
-		"DisplayName": displayName,
-	}
-	w.Header().Set("Content-Type", "text/html; charset=utf-8")
-	t.ExecuteTemplate(w, "leaving_base.html", data)
+// HandleLeavingItems returns the handler for the leaving items API.
+func (s *Server) HandleLeavingItems() http.HandlerFunc {
+	return s.handleLeavingItems
+}
+
+// HandleKeepItem returns the handler for keeping an item.
+func (s *Server) HandleKeepItem() http.HandlerFunc {
+	return s.handleKeepItem
 }
 
 func (s *Server) HandleLoginPage() http.HandlerFunc {
@@ -42,9 +57,9 @@ func (s *Server) HandleLoginPage() http.HandlerFunc {
 func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
 	if user := s.validateSession(r); user != nil {
 		if user.IsAdmin {
-			http.Redirect(w, r, "/", http.StatusSeeOther)
+			http.Redirect(w, r, "/admin", http.StatusSeeOther)
 		} else {
-			http.Redirect(w, r, "/leaving", http.StatusSeeOther)
+			http.Redirect(w, r, "/", http.StatusSeeOther)
 		}
 		return
 	}
@@ -72,7 +87,7 @@ func (s *Server) handleLeavingItems(w http.ResponseWriter, r *http.Request) {
 	err := s.DB.Select(&items, `
 		SELECT rating_key, collection, title, media_type,
 		       COALESCE(size_bytes, 0) as size_bytes, grace_expires,
-		       first_seen, override, tmdb_id
+		       first_seen, override, tmdb_id, show_rating_key, season_number
 		FROM items
 		WHERE status = 'staged'
 		ORDER BY grace_expires ASC`)
@@ -98,6 +113,12 @@ func (s *Server) handleLeavingItems(w http.ResponseWriter, r *http.Request) {
 		}
 		if it.TmdbID.Valid {
 			m["tmdb_id"] = it.TmdbID.Int64
+		}
+		if it.ShowRatingKey.Valid {
+			m["show_rating_key"] = it.ShowRatingKey.String
+		}
+		if it.SeasonNumber.Valid {
+			m["season_number"] = it.SeasonNumber.Int64
 		}
 		out = append(out, m)
 	}

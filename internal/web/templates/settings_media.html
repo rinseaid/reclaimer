@@ -155,7 +155,7 @@
         btn.textContent = 'Saving...';
         btn.classList.add('opacity-50', 'cursor-not-allowed');
 
-        fetch('/api/settings', {
+        fetch('/admin/api/settings', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ settings: updates }),
@@ -182,7 +182,7 @@
         btn.disabled = true;
         status.innerHTML = '<span class="text-zinc-400">Creating PIN...</span>';
 
-        fetch('/api/settings/plex-auth', { method: 'POST' })
+        fetch('/admin/api/settings/plex-auth', { method: 'POST' })
             .then(r => r.json())
             .then(data => {
                 if (data.error) { status.innerHTML = '<span class="text-rose-400">' + data.error + '</span>'; btn.disabled = false; return; }
@@ -205,7 +205,7 @@
         let attempts = 0;
         const maxAttempts = 10;
         const poll = () => {
-            fetch('/api/settings/plex-auth/' + pinId)
+            fetch('/admin/api/settings/plex-auth/' + pinId)
                 .then(r => r.json())
                 .then(pin => {
                     if (pin.waiting) {
@@ -238,7 +238,7 @@
     if (pendingPin) resumePlexAuth(pendingPin);
 
     function plexFetchServers(token) {
-        fetch('/api/settings/plex-servers?token=' + encodeURIComponent(token))
+        fetch('/admin/api/settings/plex-servers?token=' + encodeURIComponent(token))
             .then(r => r.json())
             .then(data => {
                 const servers = data.servers || [];
@@ -277,7 +277,7 @@
             if (tokenInput && tokenInput.value) payload.api_key = tokenInput.value;
         }
 
-        fetch('/api/settings/test-connection', {
+        fetch('/admin/api/settings/test-connection', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(payload),
@@ -295,7 +295,7 @@
         });
     };
 
-    fetch('/api/settings')
+    fetch('/admin/api/settings')
         .then(r => {
             if (!r.ok) throw new Error('Server returned ' + r.status);
             return r.json();

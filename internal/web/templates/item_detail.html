@@ -74,10 +74,10 @@ function fmtDateTimeUTC(d) {
 
 if (ratingKey) {
 Promise.all([
-    fetch(`/api/items/${ratingKey}`).then(r => r.json()),
-    fetch('/api/settings').then(r => r.json()).catch(() => ({})),
-    fetch('/api/settings/plex-libraries').then(r => r.json()).catch(() => ({})),
-    fetch('/api/instances').then(r => r.json()).catch(() => ({instances: []})),
+    fetch(`/admin/api/items/${ratingKey}`).then(r => r.json()),
+    fetch('/admin/api/settings').then(r => r.json()).catch(() => ({})),
+    fetch('/admin/api/settings/plex-libraries').then(r => r.json()).catch(() => ({})),
+    fetch('/admin/api/instances').then(r => r.json()).catch(() => ({instances: []})),
 ])
 .then(async ([data, settings, plexInfo, instancesData]) => {
     const _instances = (instancesData && instancesData.instances) || [];
@@ -113,7 +113,7 @@ Promise.all([
             if (i > 0) html += '<span class="text-zinc-500 mx-1">/</span>';
             const isLast = i === data.breadcrumb.length - 1;
             if (!isLast && c.rating_key) {
-                html += `<a href="/items/${c.rating_key}" class="text-sky-500 hover:text-sky-400">${c.title}</a>`;
+                html += `<a href="/admin/items/${c.rating_key}" class="text-sky-500 hover:text-sky-400">${c.title}</a>`;
             } else {
                 html += `<span class="${isLast ? 'text-zinc-300' : 'text-zinc-400'}">${c.title}</span>`;
             }
@@ -128,7 +128,7 @@ Promise.all([
     const summarySnippet = summary.length > 250 ? summary.slice(0, 250) + '...' : summary;
 
     html += `<div class="flex items-start gap-5 mb-6">
-        <img src="/api/items/${ratingKey}/poster?size=md" loading="lazy" decoding="async" alt=""
+        <img src="/admin/api/items/${ratingKey}/poster?size=md" loading="lazy" decoding="async" alt=""
              class="shrink-0 rounded-md w-[120px] h-[180px] object-cover bg-zinc-800 border border-zinc-800"
              onerror="this.style.visibility='hidden'">
         <div class="flex-1">
@@ -148,7 +148,7 @@ Promise.all([
         html += `<span class="px-2 py-0.5 rounded-md text-xs font-semibold ${badgeClass}">${statusLabel}</span>`;
         if (entry.collection) {
             const colSlug = entry.collection.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-            html += `<a href="/rules/${colSlug}" class="px-2 py-0.5 rounded-md text-xs font-semibold bg-sky-500/15 text-sky-400 no-underline hover:bg-sky-500/25">${entry.collection}</a>`;
+            html += `<a href="/admin/rules/${colSlug}" class="px-2 py-0.5 rounded-md text-xs font-semibold bg-sky-500/15 text-sky-400 no-underline hover:bg-sky-500/25">${entry.collection}</a>`;
         }
         if (entry.override) {
             const oLabel = entry.override === 'keep' ? 'Manually kept' : entry.override === 'delete' ? 'Manually deleted' : entry.override;
@@ -174,7 +174,7 @@ Promise.all([
         if (entry.collection) {
             const colSlug = entry.collection.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
             try {
-                const cfgResp = await fetch(`/api/collections/${encodeURIComponent(colSlug)}/config`);
+                const cfgResp = await fetch(`/admin/api/collections/${encodeURIComponent(colSlug)}/config`);
                 if (cfgResp.ok) { collectionAction = (await cfgResp.json()).action || 'none'; }
             } catch(e) {}
         }
@@ -235,11 +235,11 @@ Promise.all([
         if (isSeasons) {
             html += '<div class="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-3 mb-6">';
             for (const c of data.children) {
-                html += `<a href="/items/${c.rating_key}" class="group no-underline">
+                html += `<a href="/admin/items/${c.rating_key}" class="group no-underline">
                     <div class="aspect-[2/3] rounded-md overflow-hidden bg-zinc-800 border border-zinc-800 mb-1">
-                        <img src="/api/items/${c.rating_key}/poster?size=sm" loading="lazy" decoding="async" alt=""
+                        <img src="/admin/api/items/${c.rating_key}/poster?size=sm" loading="lazy" decoding="async" alt=""
                              class="w-full h-full object-cover group-hover:opacity-80 transition-opacity"
-                             onerror="if(!this.dataset.fell){this.dataset.fell='1';this.src='/api/items/${ratingKey}/poster?size=sm';}else{this.style.visibility='hidden';}">
+                             onerror="if(!this.dataset.fell){this.dataset.fell='1';this.src='/admin/api/items/${ratingKey}/poster?size=sm';}else{this.style.visibility='hidden';}">
                     </div>
                     <p class="text-sm font-medium text-zinc-300 group-hover:text-zinc-100 truncate">${c.title}</p>
                     ${c.leaf_count ? '<p class="text-xs text-zinc-500">' + c.leaf_count + ' episodes</p>' : ''}
@@ -249,7 +249,7 @@ Promise.all([
         } else {
             html += '<table class="w-full text-sm mb-6"><thead><tr class="border-b border-zinc-800"><th class="text-left py-2 px-3 text-zinc-400 font-medium w-12">#</th><th class="text-left py-2 px-3 text-zinc-400 font-medium">Title</th></tr></thead><tbody class="divide-y divide-zinc-800">';
             for (const c of data.children) {
-                html += `<tr class="hover:bg-zinc-800/50 cursor-pointer" onclick="window.location='/items/${c.rating_key}'">
+                html += `<tr class="hover:bg-zinc-800/50 cursor-pointer" onclick="window.location='/admin/items/${c.rating_key}'">
                     <td class="py-2 px-3 text-zinc-500 tabular-nums">${c.index || ''}</td>
                     <td class="py-2 px-3 text-zinc-100">${c.title}</td>
                 </tr>`;
@@ -408,7 +408,7 @@ Promise.all([
                 const slug = (ev.collection || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
                 if (!slug) return;
                 try {
-                    const resp = await fetch(`/api/collections/${slug}/config`);
+                    const resp = await fetch(`/admin/api/collections/${slug}/config`);
                     if (resp.ok) {
                         const cfg = await resp.json();
                         let crit = cfg.criteria || {};
@@ -455,7 +455,7 @@ Promise.all([
                     : '<span class="px-2 py-0.5 rounded-md text-xs font-semibold bg-emerald-500/15 text-emerald-500 ml-2">Protected</span>';
                 const meta = [ACTION_LABELS_R[ev.action] || ev.action || 'none', ev.grace_days ? ev.grace_days + 'd grace' : ''].filter(Boolean).join(' \u00b7 ');
                 rhtml += `<details open class="mb-4"><summary class="cursor-pointer font-semibold text-base text-zinc-100">
-                    <a href="/rules/${colSlug}" class="text-sky-500 hover:text-sky-400 no-underline">${ev.collection}</a>${badge}
+                    <a href="/admin/rules/${colSlug}" class="text-sky-500 hover:text-sky-400 no-underline">${ev.collection}</a>${badge}
                     <span class="ml-3 font-normal text-sm text-zinc-500">${meta}</span></summary>
                     <table class="w-full text-sm mt-2"><thead><tr class="border-b border-zinc-800"><th class="text-left py-2 px-3 text-zinc-400 font-medium">Check</th><th class="text-left py-2 px-3 text-zinc-400 font-medium w-28">Status</th><th class="text-left py-2 px-3 text-zinc-400 font-medium">Explanation</th></tr></thead><tbody class="divide-y divide-zinc-800">`;
                 for (const r of ev.rules) {
@@ -470,7 +470,7 @@ Promise.all([
             container.innerHTML = rhtml;
         }
 
-        fetch(`/api/items/${ratingKey}/evaluate`).then(r => r.json()).then(liveData => {
+        fetch(`/admin/api/items/${ratingKey}/evaluate`).then(r => r.json()).then(liveData => {
             if (liveData.error) {
                 if (storedRules.length > 0) {
                     const grouped = {};
@@ -508,7 +508,7 @@ Promise.all([
         });
 
         // Seerr requests
-        fetch(`/api/items/${ratingKey}/seerr-requests`).then(r => r.json()).then(seerr => {
+        fetch(`/admin/api/items/${ratingKey}/seerr-requests`).then(r => r.json()).then(seerr => {
             const section = document.getElementById('seerr-request-section');
             if (!section) return;
             const hasReqs = seerr.requests && seerr.requests.length > 0;
@@ -564,7 +564,7 @@ document.getElementById('confirm-delete-btn').addEventListener('click', () => {
 function clearOverrideInline(btn) {
     if (!btn) return;
     btn.disabled = true; btn.textContent = '...';
-    fetch(`/api/items/${ratingKey}/action`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'clear'}) })
+    fetch(`/admin/api/items/${ratingKey}/action`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: 'clear'}) })
     .then(r => r.json()).then(d => {
         if (d.status === 'ok') { showToast('Override cleared', 'success'); const pill = btn.closest('span.inline-flex'); if (pill) pill.remove(); }
         else { showToast('Clear failed', 'error'); btn.disabled = false; btn.textContent = 'Clear'; }
@@ -577,7 +577,7 @@ function doAction(action, btn) {
     allBtns.forEach(b => { b.disabled = true; b.classList.add('opacity-50'); });
     btn.textContent = btn.textContent + '...';
     result.innerHTML = '';
-    fetch(`/api/items/${ratingKey}/action`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: action}) })
+    fetch(`/admin/api/items/${ratingKey}/action`, { method: 'POST', headers: {'Content-Type': 'application/json'}, body: JSON.stringify({action: action}) })
     .then(r => r.json()).then(data => {
         allBtns.forEach(b => { b.disabled = false; b.classList.remove('opacity-50'); });
         btn.textContent = btn.textContent.replace(/\.\.\.$/, '');
@@ -607,7 +607,7 @@ searchInput.addEventListener('input', function() {
     const q = this.value.trim();
     if (q.length < 2) { searchResults.classList.add('hidden'); return; }
     searchTimeout = setTimeout(() => {
-        fetch('/api/items/search?q=' + encodeURIComponent(q)).then(r => r.json()).then(data => {
+        fetch('/admin/api/items/search?q=' + encodeURIComponent(q)).then(r => r.json()).then(data => {
             if (!data.results || data.results.length === 0) {
                 searchList.innerHTML = '<div class="px-3 py-3 text-zinc-500">No items found</div>';
             } else {
@@ -615,8 +615,8 @@ searchInput.addEventListener('input', function() {
                     const meta = [item.media_type || ''];
                     if (item.collection) meta.push(item.collection);
                     else if (item.source === 'plex') meta.push('Plex library');
-                    const poster = `<img src="/api/items/${item.rating_key}/poster?size=sm" loading="lazy" decoding="async" alt="" class="shrink-0 rounded w-[30px] h-[45px] object-cover bg-zinc-800" onerror="this.style.visibility='hidden'">`;
-                    return `<a href="/items/${item.rating_key}" class="flex items-center gap-3 px-3 py-2 no-underline border-b border-zinc-800 hover:bg-zinc-800 transition-colors">
+                    const poster = `<img src="/admin/api/items/${item.rating_key}/poster?size=sm" loading="lazy" decoding="async" alt="" class="shrink-0 rounded w-[30px] h-[45px] object-cover bg-zinc-800" onerror="this.style.visibility='hidden'">`;
+                    return `<a href="/admin/items/${item.rating_key}" class="flex items-center gap-3 px-3 py-2 no-underline border-b border-zinc-800 hover:bg-zinc-800 transition-colors">
                         ${poster}
                         <span class="flex-1 min-w-0 truncate">
                             <span class="font-semibold text-zinc-100">${item.title || item.rating_key}</span>

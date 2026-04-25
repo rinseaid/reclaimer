@@ -116,6 +116,13 @@ func main() {
 		TemplateDir: tmplDir,
 	}
 
+	apiServer := &api.Server{
+		Store:        st,
+		Config:       cfg,
+		DB:           db,
+		Orchestrator: orch,
+	}
+
 	// Public routes (no auth)
 	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
 	r.Mount("/auth", viewerServer.AuthRoutes())
@@ -123,18 +130,17 @@ func main() {
 	r.Get("/keep/{token}", viewerServer.HandleMagicKeep)
 
 	// Viewer routes (any authenticated user)
-	r.Mount("/leaving", viewerServer.LeavingRoutes())
+	r.Group(func(r chi.Router) {
+		r.Use(viewerServer.RequireAuth)
+		r.Get("/", viewerServer.HandleViewerPage())
+		r.Get("/leaving/items", viewerServer.HandleLeavingItems())
+		r.Post("/leaving/items/{ratingKey}/keep", viewerServer.HandleKeepItem())
+		r.Get("/api/items/{ratingKey}/poster", apiServer.HandlePoster())
+	})
 
 	// Admin routes (authenticated + is_admin)
-	r.Group(func(r chi.Router) {
+	r.Route("/admin", func(r chi.Router) {
 		r.Use(viewerServer.RequireAdmin)
-
-		apiServer := &api.Server{
-			Store:        st,
-			Config:       cfg,
-			DB:           db,
-			Orchestrator: orch,
-		}
 		r.Mount("/api", apiServer.Routes())
 
 		webServer := &web.Server{TemplateDir: tmplDir}

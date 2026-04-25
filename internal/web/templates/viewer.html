@@ -1,0 +1,389 @@
+{{define "content"}}
+<div class="mb-6">
+    <h1 class="text-2xl font-bold text-zinc-100">Leaving Soon</h1>
+    <p class="text-sm text-zinc-400 mt-1">Items scheduled for removal. Keep anything you still want.</p>
+</div>
+
+<!-- Controls bar -->
+<div class="flex flex-wrap items-center gap-3 mb-4">
+    <!-- Category tabs -->
+    <div class="flex border-b border-zinc-800 gap-1">
+        <button class="category-tab active" data-category="all">All</button>
+        <button class="category-tab" data-category="movie">Movies</button>
+        <button class="category-tab" data-category="tv">TV Shows</button>
+    </div>
+    <div class="flex-1"></div>
+    <!-- Search -->
+    <div class="relative">
+        <input id="search-input" type="text" placeholder="Search..."
+               class="w-48 px-3 py-1.5 pl-8 rounded-md bg-zinc-900 border border-zinc-700 text-zinc-100 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+        <svg class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-zinc-500" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="2"><circle cx="8.5" cy="8.5" r="5.5"/><line x1="12.5" y1="12.5" x2="17" y2="17" stroke-linecap="round"/></svg>
+    </div>
+</div>
+
+<!-- Filter chips -->
+<div id="filter-bar" class="flex flex-wrap items-center gap-2 mb-5">
+    <span class="text-xs text-zinc-500 mr-1">Collection:</span>
+    <div id="collection-chips" class="flex flex-wrap gap-1.5"></div>
+</div>
+
+<!-- Stats bar -->
+<div id="stats-bar" class="flex items-center gap-4 mb-5 text-xs text-zinc-500">
+    <span id="stat-count"></span>
+    <span id="stat-size"></span>
+</div>
+
+<!-- Loading / empty states -->
+<div id="items-loading" class="text-center text-zinc-500 py-16"><span class="spinner"></span></div>
+<div id="items-empty" class="hidden text-center py-16">
+    <div class="text-zinc-600 text-4xl mb-3">&#127881;</div>
+    <div class="text-zinc-400 font-medium">Nothing is leaving</div>
+    <div class="text-zinc-500 text-sm mt-1">Everything is safe for now.</div>
+</div>
+
+<!-- Poster grid -->
+<div id="items-grid" class="hidden grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4"></div>
+
+<!-- TV show drilldown modal -->
+<div id="show-modal" class="hidden fixed inset-0 z-50 flex items-center justify-center bg-black/70 backdrop-blur-sm" onclick="if(event.target===this)closeShowModal()">
+    <div class="bg-zinc-900 border border-zinc-700 rounded-xl shadow-2xl max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto">
+        <div class="flex items-center justify-between p-5 border-b border-zinc-800">
+            <h2 id="show-modal-title" class="text-lg font-bold text-zinc-100"></h2>
+            <button onclick="closeShowModal()" class="text-zinc-500 hover:text-zinc-300 transition-colors">&times;</button>
+        </div>
+        <div id="show-modal-body" class="p-5"></div>
+    </div>
+</div>
+
+<script>
+(function() {
+    const grid = document.getElementById('items-grid');
+    const loading = document.getElementById('items-loading');
+    const empty = document.getElementById('items-empty');
+    const searchInput = document.getElementById('search-input');
+    const collectionChips = document.getElementById('collection-chips');
+    const statCount = document.getElementById('stat-count');
+    const statSize = document.getElementById('stat-size');
+
+    let allItems = [];
+    let activeCategory = 'all';
+    let activeCollections = new Set();
+    let searchQuery = '';
+
+    function formatSize(bytes) {
+        if (bytes <= 0) return '';
+        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        let i = 0, size = bytes;
+        while (size >= 1024 && i < units.length - 1) { size /= 1024; i++; }
+        return size.toFixed(i > 1 ? 1 : 0) + ' ' + units[i];
+    }
+
+    function daysUntil(dateStr) {
+        const diff = Math.ceil((new Date(dateStr) - new Date()) / 86400000);
+        if (diff <= 0) return 'Any day now';
+        if (diff === 1) return '1 day';
+        return diff + ' days';
+    }
+
+    function urgencyClass(dateStr) {
+        const diff = Math.ceil((new Date(dateStr) - new Date()) / 86400000);
+        if (diff <= 3) return 'text-red-400';
+        if (diff <= 7) return 'text-amber-400';
+        return 'text-zinc-500';
+    }
+
+    function escapeHtml(s) {
+        if (!s) return '';
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    function escapeAttr(s) {
+        return (s||'').replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function keepItem(ratingKey, btn) {
+        btn.disabled = true;
+        btn.innerHTML = '<span class="spinner spinner-sm"></span>';
+        fetch('/leaving/items/' + encodeURIComponent(ratingKey) + '/keep', {
+            method: 'POST',
+            headers: { 'Accept': 'application/json' }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'kept') {
+                btn.textContent = 'Kept';
+                btn.className = 'w-full mt-2 px-3 py-1.5 rounded-md text-xs font-medium bg-zinc-700 text-zinc-400 cursor-default';
+                const item = allItems.find(i => i.rating_key === ratingKey);
+                if (item) item.override = 'keep';
+            } else {
+                btn.textContent = 'Keep';
+                btn.disabled = false;
+            }
+        })
+        .catch(() => { btn.textContent = 'Keep'; btn.disabled = false; });
+    }
+
+    function getFiltered() {
+        return allItems.filter(item => {
+            if (activeCategory === 'movie' && item.media_type !== 'movie') return false;
+            if (activeCategory === 'tv' && item.media_type === 'movie') return false;
+            if (activeCollections.size > 0 && !activeCollections.has(item.collection)) return false;
+            if (searchQuery) {
+                const q = searchQuery.toLowerCase();
+                const title = (item.title || '').toLowerCase();
+                if (!title.includes(q)) return false;
+            }
+            return true;
+        });
+    }
+
+    function groupTVShows(items) {
+        const movies = items.filter(i => i.media_type === 'movie');
+        const tvItems = items.filter(i => i.media_type !== 'movie');
+
+        const showMap = new Map();
+        for (const item of tvItems) {
+            const showKey = item.show_rating_key || item.rating_key;
+            if (!showMap.has(showKey)) {
+                showMap.set(showKey, {
+                    show_rating_key: showKey,
+                    title: item.title,
+                    collection: item.collection,
+                    seasons: [],
+                    earliest_expires: item.grace_expires,
+                    total_size: 0,
+                    any_kept: false,
+                });
+            }
+            const show = showMap.get(showKey);
+            show.seasons.push(item);
+            show.total_size += item.size_bytes || 0;
+            if (item.grace_expires < show.earliest_expires) show.earliest_expires = item.grace_expires;
+            if (item.override === 'keep') show.any_kept = true;
+        }
+
+        return { movies, shows: Array.from(showMap.values()) };
+    }
+
+    function renderCard(item) {
+        const isKept = item.override === 'keep';
+        const rk = item.rating_key;
+        const title = escapeHtml(item.title || rk);
+        const days = daysUntil(item.grace_expires);
+        const uc = urgencyClass(item.grace_expires);
+
+        const card = document.createElement('div');
+        card.className = 'poster-card';
+        card.innerHTML = `
+            <div class="relative">
+                <img src="/api/items/${encodeURIComponent(rk)}/poster?size=md" loading="lazy" decoding="async" alt=""
+                     onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+                <div class="hidden w-full aspect-[2/3] bg-zinc-800 items-center justify-center">
+                    <svg class="w-10 h-10 text-zinc-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="18" rx="2"/><circle cx="8" cy="9" r="2"/><path d="M22 16l-5-5-3 3-3-3-9 9"/></svg>
+                </div>
+                <div class="absolute top-2 right-2">
+                    <span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${uc} bg-black/60 backdrop-blur-sm">${days}</span>
+                </div>
+                ${isKept ? '<div class="absolute top-2 left-2"><span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-500/80 text-white">Kept</span></div>' : ''}
+            </div>
+            <div class="card-body">
+                <div class="text-sm font-medium text-zinc-100 truncate" title="${escapeAttr(item.title)}">${title}</div>
+                <div class="text-xs text-zinc-500 truncate mt-0.5">${escapeHtml(item.collection)}</div>
+                ${!isKept ? `<button data-rk="${escapeAttr(rk)}" class="keep-btn w-full mt-2 px-3 py-1.5 rounded-md text-xs font-medium bg-emerald-600 hover:bg-emerald-500 text-white transition-colors cursor-pointer">Keep</button>` : ''}
+            </div>
+        `;
+        const btn = card.querySelector('.keep-btn');
+        if (btn) btn.addEventListener('click', function() { keepItem(rk, this); });
+        return card;
+    }
+
+    function renderShowCard(show) {
+        const rk = show.seasons[0]?.rating_key || show.show_rating_key;
+        const posterRk = show.show_rating_key || rk;
+        const title = escapeHtml(show.title || posterRk);
+        const days = daysUntil(show.earliest_expires);
+        const uc = urgencyClass(show.earliest_expires);
+        const count = show.seasons.length;
+
+        const card = document.createElement('div');
+        card.className = 'poster-card cursor-pointer';
+        card.addEventListener('click', () => openShowModal(show));
+        card.innerHTML = `
+            <div class="relative">
+                <img src="/api/items/${encodeURIComponent(posterRk)}/poster?size=md" loading="lazy" decoding="async" alt=""
+                     onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
+                <div class="hidden w-full aspect-[2/3] bg-zinc-800 items-center justify-center">
+                    <svg class="w-10 h-10 text-zinc-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="18" rx="2"/><circle cx="8" cy="9" r="2"/><path d="M22 16l-5-5-3 3-3-3-9 9"/></svg>
+                </div>
+                <div class="absolute top-2 right-2">
+                    <span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${uc} bg-black/60 backdrop-blur-sm">${days}</span>
+                </div>
+                <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-2 pb-1.5 pt-4">
+                    <span class="text-[10px] font-semibold text-zinc-300">${count} season${count !== 1 ? 's' : ''}</span>
+                </div>
+                ${show.any_kept ? '<div class="absolute top-2 left-2"><span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-500/80 text-white">Kept</span></div>' : ''}
+            </div>
+            <div class="card-body">
+                <div class="text-sm font-medium text-zinc-100 truncate" title="${escapeAttr(show.title)}">${title}</div>
+                <div class="text-xs text-zinc-500 truncate mt-0.5">${escapeHtml(show.collection)}</div>
+            </div>
+        `;
+        return card;
+    }
+
+    window.openShowModal = function(show) {
+        const modal = document.getElementById('show-modal');
+        const title = document.getElementById('show-modal-title');
+        const body = document.getElementById('show-modal-body');
+        title.textContent = show.title || 'TV Show';
+
+        const sorted = [...show.seasons].sort((a, b) => (a.season_number || 0) - (b.season_number || 0));
+        body.innerHTML = '';
+
+        for (const season of sorted) {
+            const isKept = season.override === 'keep';
+            const days = daysUntil(season.grace_expires);
+            const uc = urgencyClass(season.grace_expires);
+            const sn = season.season_number != null ? `Season ${season.season_number}` : escapeHtml(season.title);
+            const size = formatSize(season.size_bytes);
+
+            const row = document.createElement('div');
+            row.className = 'flex items-center gap-4 p-3 rounded-lg hover:bg-zinc-800/50 transition-colors';
+            row.innerHTML = `
+                <div class="shrink-0 w-12 h-[72px] rounded overflow-hidden bg-zinc-800">
+                    <img src="/api/items/${encodeURIComponent(season.rating_key)}/poster?size=sm" loading="lazy" alt="" class="w-full h-full object-cover" onerror="this.style.visibility='hidden'">
+                </div>
+                <div class="flex-1 min-w-0">
+                    <div class="text-sm font-medium text-zinc-100">${sn}</div>
+                    <div class="flex items-center gap-2 mt-0.5">
+                        ${size ? `<span class="text-xs text-zinc-500">${size}</span>` : ''}
+                        <span class="text-xs ${uc}">${days}</span>
+                    </div>
+                </div>
+                <div class="shrink-0">
+                    ${isKept
+                        ? '<span class="px-3 py-1.5 rounded-md text-xs font-medium bg-zinc-700 text-zinc-400">Kept</span>'
+                        : `<button data-rk="${escapeAttr(season.rating_key)}" class="keep-btn-modal px-3 py-1.5 rounded-md text-xs font-medium bg-emerald-600 hover:bg-emerald-500 text-white transition-colors cursor-pointer">Keep</button>`
+                    }
+                </div>
+            `;
+            const btn = row.querySelector('.keep-btn-modal');
+            if (btn) btn.addEventListener('click', function(e) {
+                e.stopPropagation();
+                keepItem(season.rating_key, this);
+            });
+            body.appendChild(row);
+        }
+
+        modal.classList.remove('hidden');
+        document.body.style.overflow = 'hidden';
+    };
+
+    window.closeShowModal = function() {
+        document.getElementById('show-modal').classList.add('hidden');
+        document.body.style.overflow = '';
+    };
+
+    document.addEventListener('keydown', e => {
+        if (e.key === 'Escape') closeShowModal();
+    });
+
+    function render() {
+        const filtered = getFiltered();
+        grid.innerHTML = '';
+
+        if (filtered.length === 0 && allItems.length > 0) {
+            grid.classList.add('hidden');
+            empty.querySelector('div:nth-child(2)').textContent = 'No matches';
+            empty.querySelector('div:nth-child(3)').textContent = 'Try adjusting your filters.';
+            empty.classList.remove('hidden');
+            statCount.textContent = '';
+            statSize.textContent = '';
+            return;
+        }
+
+        if (filtered.length === 0) return;
+
+        empty.classList.add('hidden');
+        grid.classList.remove('hidden');
+
+        const { movies, shows } = groupTVShows(filtered);
+        const totalSize = filtered.reduce((s, i) => s + (i.size_bytes || 0), 0);
+        statCount.textContent = filtered.length + ' item' + (filtered.length !== 1 ? 's' : '');
+        statSize.textContent = totalSize > 0 ? formatSize(totalSize) + ' total' : '';
+
+        if (activeCategory === 'all' || activeCategory === 'movie') {
+            movies.forEach(item => grid.appendChild(renderCard(item)));
+        }
+        if (activeCategory === 'all' || activeCategory === 'tv') {
+            shows.forEach(show => {
+                if (show.seasons.length === 1 && !show.seasons[0].show_rating_key) {
+                    grid.appendChild(renderCard(show.seasons[0]));
+                } else {
+                    grid.appendChild(renderShowCard(show));
+                }
+            });
+        }
+    }
+
+    // Category tabs
+    document.querySelectorAll('.category-tab').forEach(tab => {
+        tab.addEventListener('click', function() {
+            document.querySelectorAll('.category-tab').forEach(t => t.classList.remove('active'));
+            this.classList.add('active');
+            activeCategory = this.dataset.category;
+            render();
+        });
+    });
+
+    // Search
+    let searchTimeout;
+    searchInput.addEventListener('input', () => {
+        clearTimeout(searchTimeout);
+        searchTimeout = setTimeout(() => {
+            searchQuery = searchInput.value.trim();
+            render();
+        }, 200);
+    });
+
+    // Load items
+    fetch('/leaving/items')
+        .then(r => r.json())
+        .then(data => {
+            loading.classList.add('hidden');
+            allItems = data.items || [];
+            if (allItems.length === 0) { empty.classList.remove('hidden'); return; }
+
+            // Build collection chips
+            const collections = [...new Set(allItems.map(i => i.collection))].sort();
+            collections.forEach(col => {
+                const chip = document.createElement('button');
+                chip.className = 'filter-chip';
+                chip.textContent = col;
+                chip.addEventListener('click', () => {
+                    if (activeCollections.has(col)) {
+                        activeCollections.delete(col);
+                        chip.classList.remove('active');
+                    } else {
+                        activeCollections.add(col);
+                        chip.classList.add('active');
+                    }
+                    render();
+                });
+                collectionChips.appendChild(chip);
+            });
+
+            if (collections.length <= 1) {
+                document.getElementById('filter-bar').classList.add('hidden');
+            }
+
+            render();
+        })
+        .catch(() => {
+            loading.innerHTML = '<div class="text-red-400">Failed to load items.</div>';
+        });
+})();
+</script>
+{{end}}

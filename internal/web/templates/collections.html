@@ -18,7 +18,7 @@
 </div>
 
 <nav class="flex items-center gap-2 text-sm text-zinc-400 mb-6">
-  <a href="/rules" class="text-sky-500 hover:text-sky-400">Rules</a>
+  <a href="/admin/rules" class="text-sky-500 hover:text-sky-400">Rules</a>
   <span class="text-zinc-600">/</span>
   <span id="breadcrumb-name" class="text-zinc-100">{{titleize .Name}}</span>
 </nav>
@@ -52,11 +52,11 @@
       </button>
     </div>
   </div>
-  <a href="/logs?rule={{.Name}}" title="View logs for this rule"
+  <a href="/admin/logs?rule={{.Name}}" title="View logs for this rule"
      class="inline-flex items-center gap-1 rounded-md px-3 py-1.5 text-sm font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent no-underline transition-colors">
     View logs
   </a>
-  <a href="/rules/{{.Name}}/settings" title="Rule Settings"
+  <a href="/admin/rules/{{.Name}}/settings" title="Rule Settings"
      class="inline-flex items-center gap-1.5 rounded-md px-3 py-1.5 text-sm font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent no-underline transition-colors">
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
     Settings
@@ -400,7 +400,7 @@ function setWatchlistMembership(tmdbId, onList, userId = currentWatchlistUserId)
 async function loadWatchlistMembers(userId = currentWatchlistUserId) {
   const qs = userId != null ? `?user_id=${encodeURIComponent(userId)}` : '';
   try {
-    const resp = await fetch(`/api/items/watchlist-members${qs}`);
+    const resp = await fetch(`/admin/api/items/watchlist-members${qs}`);
     if (!resp.ok) return;
     const data = await resp.json();
     const bucket = watchlistBucket(userId);
@@ -430,7 +430,7 @@ function defaultRunMode() {
 }
 
 // Load config for header badges
-fetch(`/api/collections/${colName}/config`)
+fetch(`/admin/api/collections/${colName}/config`)
   .then(r => r.ok ? r.json() : null)
   .then(cfg => {
     if (!cfg) return;
@@ -461,7 +461,7 @@ fetch(`/api/collections/${colName}/config`)
     // Fetch the current members of the keep collection so rows can render
     // the +Collection button in its toggled state.
     if (keepCollectionName) {
-      fetch(`/api/collections/${colName}/keep-members`)
+      fetch(`/admin/api/collections/${colName}/keep-members`)
         .then(r => r.ok ? r.json() : null)
         .then(data => {
           if (!data || !Array.isArray(data.members)) return;
@@ -611,7 +611,7 @@ async function fetchPage(page) {
   });
   if (currentSearch.trim()) params.set('search', currentSearch.trim());
 
-  const resp = await fetch(`/api/collections/${colName}?${params}`);
+  const resp = await fetch(`/admin/api/collections/${colName}?${params}`);
   if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
   return resp.json();
 }
@@ -786,12 +786,12 @@ function renderAll() {
     const graceDate = fmtDate(item.grace_expires);
     const graceExpired = item.grace_expires && new Date(item.grace_expires) < new Date();
 
-    const posterImg = `<img src="/api/items/${rk}/poster?size=sm" loading="lazy" decoding="async" alt="" class="shrink-0 rounded w-10 h-[60px] object-cover bg-zinc-800" onerror="this.style.visibility='hidden'">`;
+    const posterImg = `<img src="/admin/api/items/${rk}/poster?size=sm" loading="lazy" decoding="async" alt="" class="shrink-0 rounded w-10 h-[60px] object-cover bg-zinc-800" onerror="this.style.visibility='hidden'">`;
     let titleLink;
     if (item.title) {
-      titleLink = `<a href="/items/${rk}" class="text-sky-500 hover:text-sky-400">${escHTML(item.title)}</a>`;
+      titleLink = `<a href="/admin/items/${rk}" class="text-sky-500 hover:text-sky-400">${escHTML(item.title)}</a>`;
     } else {
-      titleLink = `<a href="/items/${rk}" class="text-zinc-500 hover:text-zinc-400">Unknown <span class="text-xs">(${escHTML(rk)})</span></a>`;
+      titleLink = `<a href="/admin/items/${rk}" class="text-zinc-500 hover:text-zinc-400">Unknown <span class="text-xs">(${escHTML(rk)})</span></a>`;
     }
     // shieldIcon is concatenated inline with titleLink below, so it sits next to the title text.
 
@@ -1040,8 +1040,8 @@ async function toggleWatchlist(ratingKey, tmdbId, btn, userId = currentWatchlist
   btn.innerHTML = '...';
   try {
     const url = adding
-      ? `/api/items/${ratingKey}/watchlist`
-      : `/api/items/${ratingKey}/watchlist${userId != null ? `?user_id=${encodeURIComponent(userId)}` : ''}`;
+      ? `/admin/api/items/${ratingKey}/watchlist`
+      : `/admin/api/items/${ratingKey}/watchlist${userId != null ? `?user_id=${encodeURIComponent(userId)}` : ''}`;
     const opts = {
       method: adding ? 'POST' : 'DELETE',
       headers: {'Content-Type': 'application/json'},
@@ -1090,7 +1090,7 @@ async function toggleKeepCollection(ratingKey, targetKey, btn) {
   const originalHtml = btn.innerHTML;
   btn.innerHTML = '...';
   try {
-    const url = `/api/items/${ratingKey}/${adding ? 'add-to-keep' : 'keep-collection'}`;
+    const url = `/admin/api/items/${ratingKey}/${adding ? 'add-to-keep' : 'keep-collection'}`;
     const resp = await fetch(url, {
       method: adding ? 'POST' : 'DELETE',
       headers: {'Content-Type': 'application/json'},
@@ -1129,7 +1129,7 @@ async function quickKeep(ratingKey, btn) {
   btn.disabled = true;
   btn.textContent = '...';
   try {
-    const resp = await fetch(`/api/items/${ratingKey}/action`, {
+    const resp = await fetch(`/admin/api/items/${ratingKey}/action`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({action: 'keep'}),
@@ -1150,7 +1150,7 @@ async function clearOverride(ratingKey, btn) {
   const pill = btn.closest('span');
   if (pill) pill.style.opacity = '0.5';
   try {
-    const resp = await fetch(`/api/items/${ratingKey}/action`, {
+    const resp = await fetch(`/admin/api/items/${ratingKey}/action`, {
       method: 'POST',
       headers: {'Content-Type': 'application/json'},
       body: JSON.stringify({action: 'clear'}),
@@ -1259,7 +1259,7 @@ async function bulkAction(action) {
     const clearBtn = document.getElementById('bulk-clear-btn');
     keepBtn.disabled = true; clearBtn.disabled = true;
     try {
-        const resp = await fetch('/api/items/bulk-action', {
+        const resp = await fetch('/admin/api/items/bulk-action', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
             body: JSON.stringify({ action, rating_keys: keys }),
@@ -1361,7 +1361,7 @@ function renderEmptyItemsState() {
                 class="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-semibold bg-indigo-500 hover:bg-indigo-400 text-white transition-colors">
           Run a scan
         </button>
-        <a href="/rules" class="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium border border-zinc-600 text-zinc-300 hover:bg-zinc-800 transition-colors">Back to Rules</a>
+        <a href="/admin/rules" class="inline-flex items-center gap-2 rounded-md px-4 py-2 text-sm font-medium border border-zinc-600 text-zinc-300 hover:bg-zinc-800 transition-colors">Back to Rules</a>
       </div>
     </div>`;
 }
@@ -1376,7 +1376,7 @@ async function triggerScan() {
   if (btn) { btn.disabled = true; btn.textContent = 'Starting...'; }
   showRunProgress({ phase: '', detail: 'Starting...', percent: 0, items_processed: 0, items_total: 0 }, true);
   try {
-    const resp = await fetch(`/api/run?dry_run=true&rule=${encodeURIComponent(colName)}`, { method: 'POST' });
+    const resp = await fetch(`/admin/api/run?dry_run=true&rule=${encodeURIComponent(colName)}`, { method: 'POST' });
     const d = await resp.json().catch(() => ({}));
     if (!resp.ok) throw new Error(d.detail || 'HTTP ' + resp.status);
     if (d.status === 'already_running') {
@@ -1483,7 +1483,7 @@ function showRunCompleted(lr, isDry) {
     <div class="flex items-center gap-3">
       <strong class="text-emerald-500">${label} completed</strong>
       <span class="text-zinc-400">${summary}</span>
-      <a href="/logs?rule=${encodeURIComponent(colName)}" class="ml-auto text-xs text-indigo-400 hover:text-indigo-300">View logs</a>
+      <a href="/admin/logs?rule=${encodeURIComponent(colName)}" class="ml-auto text-xs text-indigo-400 hover:text-indigo-300">View logs</a>
     </div>`;
 }
 
@@ -1495,7 +1495,7 @@ function startRunPolling(isDry) {
   currentRunIsDry = isDry;
   runPollTimer = setInterval(async () => {
     try {
-      const r = await fetch('/api/run/progress');
+      const r = await fetch('/admin/api/run/progress');
       const d = await r.json();
       if (!d.running) {
         clearInterval(runPollTimer);
@@ -1520,7 +1520,7 @@ function startRunPolling(isDry) {
 
 // If a run is already in flight when the page loads, show the banner.
 function checkRuleRunStatus() {
-  fetch('/api/run/progress')
+  fetch('/admin/api/run/progress')
     .then(r => r.json())
     .then(d => {
       if (d.running) {
@@ -1597,7 +1597,7 @@ triggerRuleRun._doRun = async function (dry) {
   showRunProgress({ phase: '', detail: 'Starting...', percent: 0, items_processed: 0, items_total: 0 }, dry);
   try {
     const qs = dry ? 'dry_run=true&' : '';
-    const resp = await fetch(`/api/run?${qs}rule=${encodeURIComponent(colName)}`, { method: 'POST' });
+    const resp = await fetch(`/admin/api/run?${qs}rule=${encodeURIComponent(colName)}`, { method: 'POST' });
     const d = await resp.json().catch(() => ({}));
     if (!resp.ok) throw new Error(d.detail || 'HTTP ' + resp.status);
     if (d.status === 'already_running') {
@@ -1677,7 +1677,7 @@ async function initialLoad() {
         <div class="text-center py-12 px-4 border-2 border-dashed border-zinc-700 rounded-lg">
           <h3 class="text-lg font-semibold text-zinc-100 mb-2">Rule Not Found</h3>
           <p class="text-zinc-500 mb-4">No rule named "${displayName}" exists. It may have been deleted.</p>
-          <a href="/rules" class="inline-flex px-4 py-2 rounded-md border border-zinc-600 text-sm text-zinc-300 hover:bg-zinc-800 transition-colors">Back to Rules</a>
+          <a href="/admin/rules" class="inline-flex px-4 py-2 rounded-md border border-zinc-600 text-sm text-zinc-300 hover:bg-zinc-800 transition-colors">Back to Rules</a>
         </div>`;
       document.getElementById('col-summary').textContent = '';
       return;

@@ -134,7 +134,7 @@
     const sensitiveKeys = new Set(['viewer_oidc_client_secret']);
 
     function loadSettings() {
-        fetch('/api/settings').then(r => r.json()).then(data => {
+        fetch('/admin/api/settings').then(r => r.json()).then(data => {
             // Provider toggles
             document.getElementById('toggle-plex').checked = data.viewer_plex_enabled === 'true' || data.viewer_plex_enabled === true;
             document.getElementById('toggle-jellyfin').checked = data.viewer_jellyfin_enabled === 'true' || data.viewer_jellyfin_enabled === true;
@@ -173,7 +173,7 @@
     }
 
     window.toggleProvider = function(key, enabled) {
-        fetch('/api/settings', {
+        fetch('/admin/api/settings', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ [key]: enabled })
@@ -197,7 +197,7 @@
         const btn = document.getElementById('oidc-save-btn');
         btn.disabled = true;
         btn.textContent = 'Saving...';
-        fetch('/api/settings', {
+        fetch('/admin/api/settings', {
             method: 'PUT',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(updates)
@@ -215,7 +215,7 @@
     });
 
     function loadUsers() {
-        fetch('/api/viewer-users').then(r => r.json()).then(data => {
+        fetch('/admin/api/viewer-users').then(r => r.json()).then(data => {
             document.getElementById('users-loading').classList.add('hidden');
             const table = document.getElementById('users-table');
             const body = document.getElementById('users-body');
@@ -247,7 +247,7 @@
     }
 
     window.updateUser = function(id, field, value) {
-        fetch('/api/viewer-users/' + id, {
+        fetch('/admin/api/viewer-users/' + id, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ [field]: value })
@@ -256,7 +256,7 @@
 
     window.deleteUser = function(id, username) {
         if (!confirm('Delete user "' + username + '"? This cannot be undone.')) return;
-        fetch('/api/viewer-users/' + id, { method: 'DELETE' }).then(() => loadUsers());
+        fetch('/admin/api/viewer-users/' + id, { method: 'DELETE' }).then(() => loadUsers());
     };
 
     function escapeHtml(s) {
