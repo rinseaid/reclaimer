@@ -44,13 +44,22 @@ func (s *Server) LeavingRoutes() chi.Router {
 	return r
 }
 
+func (s *Server) hasAnyUsers() bool {
+	var count int
+	s.DB.Get(&count, "SELECT COUNT(*) FROM viewer_users")
+	return count > 0
+}
+
 func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
+	bootstrap := !s.hasAnyUsers()
+
 	plexURL := s.Config.GetString("plex_url")
 	jellyfinURL := s.Config.GetString("jellyfin_url")
 	oidcIssuer := s.Config.GetString("viewer_oidc_issuer_url")
 	oidcClientID := s.Config.GetString("viewer_oidc_client_id")
 
 	writeJSON(w, http.StatusOK, map[string]any{
+		"bootstrap": bootstrap,
 		"plex": map[string]any{
 			"enabled":    s.Config.GetBool("viewer_plex_enabled"),
 			"configured": plexURL != "",

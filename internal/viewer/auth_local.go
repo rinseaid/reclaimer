@@ -2,6 +2,7 @@ package viewer
 
 import (
 	"encoding/json"
+	"log/slog"
 	"net/http"
 
 	"golang.org/x/crypto/bcrypt"
@@ -43,7 +44,8 @@ func (s *Server) handleLocalLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLocalRegister(w http.ResponseWriter, r *http.Request) {
-	if !s.Config.GetBool("viewer_local_enabled") {
+	bootstrap := !s.hasAnyUsers()
+	if !bootstrap && !s.Config.GetBool("viewer_local_enabled") {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "local auth disabled"})
 		return
 	}
@@ -79,6 +81,10 @@ func (s *Server) handleLocalRegister(w http.ResponseWriter, r *http.Request) {
 	}
 
 	id, _ := result.LastInsertId()
+	if bootstrap {
+		s.DB.Exec(s.DB.Rebind("UPDATE viewer_users SET is_admin = 1 WHERE id = ?"), id)
+		slog.Info("bootstrap: first user promoted to admin", "username", body.Username)
+	}
 	if err := s.createSession(w, r, id); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create session"})
 		return
