@@ -1687,32 +1687,78 @@ func (o *Orchestrator) processCollection(
 		o.DB.Rebind("SELECT rating_key, title FROM items WHERE collection = ? AND status = ?"),
 		collectionName, string(models.StatusStaged))
 
+	// Build a set of all library rating keys so we can distinguish
+	// "item no longer in library" from "item in library but failed rules."
+	libraryKeys := make(map[string]bool, len(items))
+	for _, item := range items {
+		libraryKeys[toString(item["ratingKey"])] = true
+	}
+
+	// Safety: if removing more than 90% of tracked items and the count
+	// is significant, abort to prevent accidental mass deletion from a
+	// partial or degraded library response.
+	if len(tracked) >= 10 {
+		wouldRemove := 0
+		for _, t := range tracked {
+			if !want[t.RatingKey] {
+				wouldRemove++
+			}
+		}
+		pctRemove := float64(wouldRemove) / float64(len(tracked)) * 100
+		if pctRemove > 90 {
+			slog.Warn("Aborting cleanup: would remove >90% of tracked items, possible library issue",
+				"collection", collectionName, "tracked", len(tracked),
+				"would_remove", wouldRemove, "pct", int(pctRemove),
+				"library_items", len(items))
+			o.logActivity("scan_warning", collectionName, "", "", map[string]any{
+				"dry_run": dryRun,
+				"reason": fmt.Sprintf(
+					"Skipped cleanup: %d of %d items (%.0f%%) would be removed, which suggests a library fetch problem rather than legitimate rule changes. No items were removed.",
+					wouldRemove, len(tracked), pctRemove),
+				"library_items": len(items),
+			})
+			return matched, added, 0
+		}
+	}
+
 	for _, t := range tracked {
 		if want[t.RatingKey] {
 			continue
 		}
-		// Item no longer matches criteria.
 		removed++
-		detail := map[string]any{"dry_run": dryRun, "reason": "No longer matches rule criteria"}
-		var rr []struct {
-			RuleName string `db:"rule_name"`
-			Passed   bool   `db:"passed"`
-			Detail   string `db:"detail"`
-		}
-		o.DB.Select(&rr, o.DB.Rebind(
-			"SELECT rule_name, passed, detail FROM rule_results WHERE rating_key = ? AND collection = ?"),
-			t.RatingKey, collectionName)
-		if len(rr) > 0 {
+
+		// Determine a specific reason for removal.
+		var reason string
+		if !libraryKeys[t.RatingKey] {
+			reason = "No longer found in media server library"
+		} else {
+			// Item is still in the library but didn't pass rules.
+			var rr []struct {
+				RuleName string `db:"rule_name"`
+				Passed   bool   `db:"passed"`
+				Detail   string `db:"detail"`
+			}
+			o.DB.Select(&rr, o.DB.Rebind(
+				"SELECT rule_name, passed, detail FROM rule_results WHERE rating_key = ? AND collection = ?"),
+				t.RatingKey, collectionName)
 			var failed []string
 			for _, r := range rr {
 				if !r.Passed {
-					failed = append(failed, rules.DisplayName(r.RuleName))
+					name := rules.DisplayName(r.RuleName)
+					if r.Detail != "" {
+						name += " (" + r.Detail + ")"
+					}
+					failed = append(failed, name)
 				}
 			}
 			if len(failed) > 0 {
-				detail["reason"] = "Protected: " + strings.Join(failed, ", ")
+				reason = "Now protected by: " + strings.Join(failed, "; ")
+			} else {
+				reason = "No longer matches rule criteria"
 			}
 		}
+
+		detail := map[string]any{"dry_run": dryRun, "reason": reason}
 		o.logActivity("item_removed", collectionName, t.RatingKey, t.Title, detail)
 		if !dryRun {
 			o.DB.Exec(o.DB.Rebind(
