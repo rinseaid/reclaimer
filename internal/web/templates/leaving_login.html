@@ -29,67 +29,103 @@
             providers.innerHTML = '';
             let any = false;
 
-            if (data.plex?.enabled && data.plex?.configured) {
+            if (data.bootstrap) {
                 any = true;
+                document.querySelector('p.text-zinc-400').textContent = 'Create an admin account to get started.';
                 providers.insertAdjacentHTML('beforeend', `
-                    <button id="btn-plex" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-[#e5a00d] hover:bg-[#c98d0b] text-black font-medium transition-colors">
-                        Sign in with Plex
-                    </button>
-                `);
-                document.getElementById('btn-plex').addEventListener('click', plexAuth);
-            }
-
-            if (data.jellyfin?.enabled && data.jellyfin?.configured) {
-                any = true;
-                providers.insertAdjacentHTML('beforeend', `
-                    <div id="jf-form" class="space-y-2">
-                        <div class="text-center text-xs text-zinc-500 uppercase tracking-wide">Jellyfin</div>
-                        <input id="jf-user" type="text" placeholder="Username" autocomplete="username"
+                    <div class="space-y-2">
+                        <input id="boot-user" type="text" placeholder="Username" autocomplete="username"
                                class="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-100 text-sm placeholder-zinc-500 focus:outline-none focus:border-zinc-500">
-                        <input id="jf-pass" type="password" placeholder="Password" autocomplete="current-password"
+                        <input id="boot-pass" type="password" placeholder="Password (min 8 characters)" autocomplete="new-password"
                                class="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-100 text-sm placeholder-zinc-500 focus:outline-none focus:border-zinc-500">
-                        <button id="btn-jf" class="w-full px-4 py-2.5 rounded-lg bg-[#00a4dc] hover:bg-[#0090c4] text-white font-medium transition-colors">
-                            Sign in with Jellyfin
+                        <button id="btn-boot" class="w-full px-4 py-2.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white font-medium transition-colors">
+                            Create admin account
                         </button>
                     </div>
                 `);
-                document.getElementById('btn-jf').addEventListener('click', jellyfinAuth);
-            }
-
-            if (data.oidc?.enabled && data.oidc?.configured) {
-                any = true;
-                const name = data.oidc.display_name || 'SSO';
-                providers.insertAdjacentHTML('beforeend', `
-                    <button id="btn-oidc" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-100 font-medium transition-colors">
-                        Sign in with ${name}
-                    </button>
-                `);
-                document.getElementById('btn-oidc').addEventListener('click', () => {
-                    window.location.href = '/auth/oidc/authorize';
-                });
-            }
-
-            if (data.local?.enabled) {
-                any = true;
-                providers.insertAdjacentHTML('beforeend', `
-                    <div id="local-form" class="space-y-2">
-                        <div class="text-center text-xs text-zinc-500 uppercase tracking-wide">Local Account</div>
-                        <input id="local-user" type="text" placeholder="Username" autocomplete="username"
-                               class="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-100 text-sm placeholder-zinc-500 focus:outline-none focus:border-zinc-500">
-                        <input id="local-pass" type="password" placeholder="Password" autocomplete="current-password"
-                               class="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-100 text-sm placeholder-zinc-500 focus:outline-none focus:border-zinc-500">
-                        <button id="btn-local" class="w-full px-4 py-2.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-100 font-medium transition-colors">
-                            Sign in
+                document.getElementById('btn-boot').addEventListener('click', bootstrapRegister);
+            } else {
+                if (data.plex?.enabled && data.plex?.configured) {
+                    any = true;
+                    providers.insertAdjacentHTML('beforeend', `
+                        <button id="btn-plex" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-[#e5a00d] hover:bg-[#c98d0b] text-black font-medium transition-colors">
+                            Sign in with Plex
                         </button>
-                    </div>
-                `);
-                document.getElementById('btn-local').addEventListener('click', localAuth);
-            }
+                    `);
+                    document.getElementById('btn-plex').addEventListener('click', plexAuth);
+                }
 
-            if (!any) {
-                providers.innerHTML = '<div class="text-center text-zinc-500 text-sm">No authentication providers are configured.</div>';
+                if (data.jellyfin?.enabled && data.jellyfin?.configured) {
+                    any = true;
+                    providers.insertAdjacentHTML('beforeend', `
+                        <div id="jf-form" class="space-y-2">
+                            <div class="text-center text-xs text-zinc-500 uppercase tracking-wide">Jellyfin</div>
+                            <input id="jf-user" type="text" placeholder="Username" autocomplete="username"
+                                   class="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-100 text-sm placeholder-zinc-500 focus:outline-none focus:border-zinc-500">
+                            <input id="jf-pass" type="password" placeholder="Password" autocomplete="current-password"
+                                   class="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-100 text-sm placeholder-zinc-500 focus:outline-none focus:border-zinc-500">
+                            <button id="btn-jf" class="w-full px-4 py-2.5 rounded-lg bg-[#00a4dc] hover:bg-[#0090c4] text-white font-medium transition-colors">
+                                Sign in with Jellyfin
+                            </button>
+                        </div>
+                    `);
+                    document.getElementById('btn-jf').addEventListener('click', jellyfinAuth);
+                }
+
+                if (data.oidc?.enabled && data.oidc?.configured) {
+                    any = true;
+                    const name = data.oidc.display_name || 'SSO';
+                    providers.insertAdjacentHTML('beforeend', `
+                        <button id="btn-oidc" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-100 font-medium transition-colors">
+                            Sign in with ${name}
+                        </button>
+                    `);
+                    document.getElementById('btn-oidc').addEventListener('click', () => {
+                        window.location.href = '/auth/oidc/authorize';
+                    });
+                }
+
+                if (data.local?.enabled) {
+                    any = true;
+                    providers.insertAdjacentHTML('beforeend', `
+                        <div id="local-form" class="space-y-2">
+                            <div class="text-center text-xs text-zinc-500 uppercase tracking-wide">Local Account</div>
+                            <input id="local-user" type="text" placeholder="Username" autocomplete="username"
+                                   class="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-100 text-sm placeholder-zinc-500 focus:outline-none focus:border-zinc-500">
+                            <input id="local-pass" type="password" placeholder="Password" autocomplete="current-password"
+                                   class="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-100 text-sm placeholder-zinc-500 focus:outline-none focus:border-zinc-500">
+                            <button id="btn-local" class="w-full px-4 py-2.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-100 font-medium transition-colors">
+                                Sign in
+                            </button>
+                        </div>
+                    `);
+                    document.getElementById('btn-local').addEventListener('click', localAuth);
+                }
+
+                if (!any) {
+                    providers.innerHTML = '<div class="text-center text-zinc-500 text-sm">No authentication providers are configured.</div>';
+                }
             }
         });
+
+    function bootstrapRegister() {
+        const user = document.getElementById('boot-user').value.trim();
+        const pass = document.getElementById('boot-pass').value;
+        if (!user || !pass) { showError('Username and password are required'); return; }
+        if (pass.length < 8) { showError('Password must be at least 8 characters'); return; }
+
+        fetch('/auth/register', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: user, password: pass })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) showError(data.error);
+            else window.location.href = '/';
+        })
+        .catch(() => showError('Failed to create account'));
+    }
 
     function plexAuth() {
         const btn = document.getElementById('btn-plex');
