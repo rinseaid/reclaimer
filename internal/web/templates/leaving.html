@@ -1,0 +1,133 @@
+{{define "content"}}
+<div class="flex items-baseline justify-between mb-6">
+    <div>
+        <h1 class="text-2xl font-bold text-zinc-100">What's Leaving</h1>
+        <p class="text-sm text-zinc-400 mt-1">Items scheduled for removal. Click Keep to save something you want.</p>
+    </div>
+    <div class="flex items-center gap-3">
+        <span id="user-info" class="text-sm text-zinc-400">{{.DisplayName}}</span>
+        <button id="btn-logout" class="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Sign out</button>
+    </div>
+</div>
+
+<div id="items-loading" class="text-center text-zinc-500 py-12">Loading...</div>
+<div id="items-empty" class="hidden text-center text-zinc-500 py-12">Nothing is scheduled for removal right now.</div>
+<div id="items-grid" class="grid gap-3"></div>
+
+<script>
+(function() {
+    const grid = document.getElementById('items-grid');
+    const loading = document.getElementById('items-loading');
+    const empty = document.getElementById('items-empty');
+    const userInfo = document.getElementById('user-info');
+
+    document.getElementById('btn-logout').addEventListener('click', () => {
+        fetch('/leaving/auth/logout', { method: 'POST' }).then(() => {
+            window.location.href = '/leaving/login';
+        });
+    });
+
+    function formatSize(bytes) {
+        if (bytes <= 0) return '';
+        const units = ['B', 'KB', 'MB', 'GB', 'TB'];
+        let i = 0;
+        let size = bytes;
+        while (size >= 1024 && i < units.length - 1) { size /= 1024; i++; }
+        return size.toFixed(i > 1 ? 1 : 0) + ' ' + units[i];
+    }
+
+    function daysUntil(dateStr) {
+        const d = new Date(dateStr);
+        const now = new Date();
+        const diff = Math.ceil((d - now) / (1000 * 60 * 60 * 24));
+        if (diff <= 0) return 'Any day now';
+        if (diff === 1) return '1 day left';
+        return diff + ' days left';
+    }
+
+    function daysClass(dateStr) {
+        const d = new Date(dateStr);
+        const diff = Math.ceil((d - new Date()) / (1000 * 60 * 60 * 24));
+        if (diff <= 3) return 'text-red-400';
+        if (diff <= 7) return 'text-amber-400';
+        return 'text-zinc-400';
+    }
+
+    function keepItem(ratingKey, btn) {
+        btn.disabled = true;
+        btn.textContent = 'Keeping...';
+        fetch('/leaving/items/' + encodeURIComponent(ratingKey) + '/keep', {
+            method: 'POST',
+            headers: { 'Accept': 'application/json' }
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.status === 'kept') {
+                btn.textContent = 'Kept';
+                btn.classList.remove('bg-emerald-600', 'hover:bg-emerald-500');
+                btn.classList.add('bg-zinc-700', 'text-zinc-400');
+            } else {
+                btn.textContent = 'Keep';
+                btn.disabled = false;
+            }
+        })
+        .catch(() => { btn.textContent = 'Keep'; btn.disabled = false; });
+    }
+
+    fetch('/leaving/items')
+        .then(r => r.json())
+        .then(data => {
+            loading.classList.add('hidden');
+            const items = data.items || [];
+            if (items.length === 0) { empty.classList.remove('hidden'); return; }
+
+            items.forEach(item => {
+                const title = item.title || item.rating_key;
+                const size = formatSize(item.size_bytes);
+                const days = daysUntil(item.grace_expires);
+                const dc = daysClass(item.grace_expires);
+                const isKept = item.override === 'keep';
+
+                const card = document.createElement('div');
+                card.className = 'flex items-center gap-4 p-3 rounded-lg bg-zinc-850 border border-zinc-800';
+                card.innerHTML = `
+                    <div class="shrink-0 w-12 h-16 rounded bg-zinc-800 flex items-center justify-center overflow-hidden">
+                        <span class="text-zinc-600 text-xs">${item.media_type === 'movie' ? '🎬' : '📺'}</span>
+                    </div>
+                    <div class="flex-1 min-w-0">
+                        <div class="text-sm font-medium text-zinc-100 truncate">${escapeHtml(title)}</div>
+                        <div class="flex items-center gap-2 mt-0.5">
+                            <span class="text-xs text-zinc-500">${escapeHtml(item.collection)}</span>
+                            ${size ? `<span class="text-xs text-zinc-600">·</span><span class="text-xs text-zinc-500">${size}</span>` : ''}
+                        </div>
+                        <div class="text-xs mt-1 ${dc}">${days}</div>
+                    </div>
+                    <button data-rk="${escapeAttr(item.rating_key)}"
+                            class="shrink-0 px-3 py-1.5 rounded text-sm font-medium transition-colors
+                                   ${isKept ? 'bg-zinc-700 text-zinc-400' : 'bg-emerald-600 hover:bg-emerald-500 text-white'}"
+                            ${isKept ? 'disabled' : ''}>
+                        ${isKept ? 'Kept' : 'Keep'}
+                    </button>
+                `;
+                card.querySelector('button').addEventListener('click', function() {
+                    keepItem(item.rating_key, this);
+                });
+                grid.appendChild(card);
+            });
+        })
+        .catch(() => {
+            loading.textContent = 'Failed to load items.';
+        });
+
+    function escapeHtml(s) {
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    function escapeAttr(s) {
+        return s.replace(/&/g,'&amp;').replace(/"/g,'&quot;').replace(/'/g,'&#39;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+})();
+</script>
+{{end}}

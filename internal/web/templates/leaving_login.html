@@ -1,0 +1,158 @@
+{{define "content"}}
+<div class="flex flex-col items-center justify-center min-h-[60vh]">
+    <h1 class="text-2xl font-bold text-zinc-100 mb-2">What's Leaving</h1>
+    <p class="text-zinc-400 text-sm mb-8">Sign in to see what's being removed and keep what you love.</p>
+
+    <div id="auth-providers" class="w-full max-w-sm space-y-3">
+        <div class="text-center text-zinc-500 text-sm">Loading...</div>
+    </div>
+
+    <div id="login-error" class="hidden mt-4 px-4 py-2 rounded bg-red-500/10 border border-red-500/30 text-red-400 text-sm max-w-sm w-full text-center"></div>
+</div>
+
+<script>
+(function() {
+    const providers = document.getElementById('auth-providers');
+    const errorEl = document.getElementById('login-error');
+
+    function showError(msg) {
+        errorEl.textContent = msg;
+        errorEl.classList.remove('hidden');
+    }
+
+    fetch('/leaving/auth/status')
+        .then(r => r.json())
+        .then(data => {
+            providers.innerHTML = '';
+            let any = false;
+
+            if (data.plex?.enabled && data.plex?.configured) {
+                any = true;
+                providers.insertAdjacentHTML('beforeend', `
+                    <button id="btn-plex" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-[#e5a00d] hover:bg-[#c98d0b] text-black font-medium transition-colors">
+                        Sign in with Plex
+                    </button>
+                `);
+                document.getElementById('btn-plex').addEventListener('click', plexAuth);
+            }
+
+            if (data.jellyfin?.enabled && data.jellyfin?.configured) {
+                any = true;
+                providers.insertAdjacentHTML('beforeend', `
+                    <div id="jf-form" class="space-y-2">
+                        <div class="text-center text-xs text-zinc-500 uppercase tracking-wide">Jellyfin</div>
+                        <input id="jf-user" type="text" placeholder="Username" autocomplete="username"
+                               class="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-100 text-sm placeholder-zinc-500 focus:outline-none focus:border-zinc-500">
+                        <input id="jf-pass" type="password" placeholder="Password" autocomplete="current-password"
+                               class="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-100 text-sm placeholder-zinc-500 focus:outline-none focus:border-zinc-500">
+                        <button id="btn-jf" class="w-full px-4 py-2.5 rounded-lg bg-[#00a4dc] hover:bg-[#0090c4] text-white font-medium transition-colors">
+                            Sign in with Jellyfin
+                        </button>
+                    </div>
+                `);
+                document.getElementById('btn-jf').addEventListener('click', jellyfinAuth);
+            }
+
+            if (data.oidc?.enabled && data.oidc?.configured) {
+                any = true;
+                const name = data.oidc.display_name || 'SSO';
+                providers.insertAdjacentHTML('beforeend', `
+                    <button id="btn-oidc" class="w-full flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-100 font-medium transition-colors">
+                        Sign in with ${name}
+                    </button>
+                `);
+                document.getElementById('btn-oidc').addEventListener('click', () => {
+                    window.location.href = '/leaving/auth/oidc/authorize';
+                });
+            }
+
+            if (data.local?.enabled) {
+                any = true;
+                providers.insertAdjacentHTML('beforeend', `
+                    <div id="local-form" class="space-y-2">
+                        <div class="text-center text-xs text-zinc-500 uppercase tracking-wide">Local Account</div>
+                        <input id="local-user" type="text" placeholder="Username" autocomplete="username"
+                               class="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-100 text-sm placeholder-zinc-500 focus:outline-none focus:border-zinc-500">
+                        <input id="local-pass" type="password" placeholder="Password" autocomplete="current-password"
+                               class="w-full px-3 py-2 rounded-lg bg-zinc-800 border border-zinc-700 text-zinc-100 text-sm placeholder-zinc-500 focus:outline-none focus:border-zinc-500">
+                        <button id="btn-local" class="w-full px-4 py-2.5 rounded-lg bg-zinc-700 hover:bg-zinc-600 text-zinc-100 font-medium transition-colors">
+                            Sign in
+                        </button>
+                    </div>
+                `);
+                document.getElementById('btn-local').addEventListener('click', localAuth);
+            }
+
+            if (!any) {
+                providers.innerHTML = '<div class="text-center text-zinc-500 text-sm">No authentication providers are configured.</div>';
+            }
+        });
+
+    function plexAuth() {
+        const btn = document.getElementById('btn-plex');
+        btn.disabled = true;
+        btn.textContent = 'Opening Plex...';
+
+        fetch('/leaving/auth/plex/pin', { method: 'POST' })
+            .then(r => r.json())
+            .then(data => {
+                if (data.error) { showError(data.error); btn.disabled = false; btn.textContent = 'Sign in with Plex'; return; }
+                window.open(data.auth_url, '_blank', 'width=800,height=600');
+                btn.textContent = 'Waiting for Plex...';
+                pollPlexPin(data.pin_id, btn);
+            })
+            .catch(() => { showError('Failed to start Plex auth'); btn.disabled = false; btn.textContent = 'Sign in with Plex'; });
+    }
+
+    function pollPlexPin(pinId, btn) {
+        let attempts = 0;
+        const iv = setInterval(() => {
+            attempts++;
+            if (attempts > 60) { clearInterval(iv); btn.disabled = false; btn.textContent = 'Sign in with Plex'; showError('Plex auth timed out'); return; }
+            fetch('/leaving/auth/plex/pin/' + pinId)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.status === 'authenticated') { clearInterval(iv); window.location.href = '/leaving'; }
+                    else if (data.error) { clearInterval(iv); showError(data.error); btn.disabled = false; btn.textContent = 'Sign in with Plex'; }
+                });
+        }, 2000);
+    }
+
+    function jellyfinAuth() {
+        const user = document.getElementById('jf-user').value.trim();
+        const pass = document.getElementById('jf-pass').value;
+        if (!user) { showError('Username is required'); return; }
+
+        fetch('/leaving/auth/jellyfin/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: user, password: pass })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) showError(data.error);
+            else window.location.href = '/leaving';
+        })
+        .catch(() => showError('Failed to authenticate'));
+    }
+
+    function localAuth() {
+        const user = document.getElementById('local-user').value.trim();
+        const pass = document.getElementById('local-pass').value;
+        if (!user || !pass) { showError('Username and password are required'); return; }
+
+        fetch('/leaving/auth/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ username: user, password: pass })
+        })
+        .then(r => r.json())
+        .then(data => {
+            if (data.error) showError(data.error);
+            else window.location.href = '/leaving';
+        })
+        .catch(() => showError('Failed to authenticate'));
+    }
+})();
+</script>
+{{end}}

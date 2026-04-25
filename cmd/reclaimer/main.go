@@ -19,6 +19,7 @@ import (
 	"github.com/rinseaid/reclaimer/internal/orchestrator"
 	"github.com/rinseaid/reclaimer/internal/scheduler"
 	"github.com/rinseaid/reclaimer/internal/store"
+	"github.com/rinseaid/reclaimer/internal/viewer"
 	"github.com/rinseaid/reclaimer/internal/web"
 )
 
@@ -115,6 +116,19 @@ func main() {
 	if tmplDir == "" {
 		tmplDir = "/app/templates"
 	}
+
+	viewerServer := &viewer.Server{
+		Store:       st,
+		Config:      cfg,
+		DB:          db,
+		TemplateDir: tmplDir,
+	}
+	r.Mount("/leaving", viewerServer.Routes())
+	r.Get("/keep/{token}", viewerServer.HandleMagicKeep)
+
+	sched.AddFunc("viewer_session_cleanup", "@every 1h", func() {
+		viewerServer.CleanupSessions()
+	})
 	webServer := &web.Server{TemplateDir: tmplDir}
 	webServer.Routes(r)
 
