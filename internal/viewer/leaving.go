@@ -35,10 +35,17 @@ func (s *Server) handleLeavingPage(w http.ResponseWriter, r *http.Request) {
 	t.ExecuteTemplate(w, "leaving_base.html", data)
 }
 
+func (s *Server) HandleLoginPage() http.HandlerFunc {
+	return s.handleLoginPage
+}
+
 func (s *Server) handleLoginPage(w http.ResponseWriter, r *http.Request) {
-	// If already logged in, redirect
-	if s.validateSession(r) != nil {
-		http.Redirect(w, r, "/leaving", http.StatusSeeOther)
+	if user := s.validateSession(r); user != nil {
+		if user.IsAdmin {
+			http.Redirect(w, r, "/", http.StatusSeeOther)
+		} else {
+			http.Redirect(w, r, "/leaving", http.StatusSeeOther)
+		}
 		return
 	}
 

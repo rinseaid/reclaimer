@@ -67,6 +67,13 @@ func (db *DB) migrate() error {
 	for _, r := range renames {
 		db.Exec(db.Rebind("UPDATE settings SET key = ? WHERE key = ?"), r[1], r[0])
 	}
+
+	if db.Dialect == DialectPostgres {
+		db.Exec("ALTER TABLE viewer_users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE")
+	} else {
+		db.Exec("ALTER TABLE viewer_users ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT 0")
+	}
+
 	return nil
 }
 

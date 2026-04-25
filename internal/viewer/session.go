@@ -96,14 +96,38 @@ func (s *Server) destroySession(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func (s *Server) requireViewer(next http.Handler) http.Handler {
+func (s *Server) requireAuth(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		user := s.validateSession(r)
 		if user == nil {
 			if isJSONRequest(r) {
 				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
 			} else {
-				http.Redirect(w, r, "/leaving/login", http.StatusSeeOther)
+				http.Redirect(w, r, "/login", http.StatusSeeOther)
+			}
+			return
+		}
+		ctx := context.WithValue(r.Context(), viewerUserKey, user)
+		next.ServeHTTP(w, r.WithContext(ctx))
+	})
+}
+
+func (s *Server) RequireAdmin(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		user := s.validateSession(r)
+		if user == nil {
+			if isJSONRequest(r) {
+				writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "authentication required"})
+			} else {
+				http.Redirect(w, r, "/login", http.StatusSeeOther)
+			}
+			return
+		}
+		if !user.IsAdmin {
+			if isJSONRequest(r) {
+				writeJSON(w, http.StatusForbidden, map[string]string{"error": "admin access required"})
+			} else {
+				http.Redirect(w, r, "/leaving", http.StatusSeeOther)
 			}
 			return
 		}

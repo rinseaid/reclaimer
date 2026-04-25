@@ -12,6 +12,7 @@ type ViewerUser struct {
 	AuthProviderID sql.NullString `db:"auth_provider_id" json:"-"`
 	AvatarURL      sql.NullString `db:"avatar_url"      json:"avatar_url"`
 	IsActive       bool           `db:"is_active"       json:"is_active"`
+	IsAdmin        bool           `db:"is_admin"        json:"is_admin"`
 	CreatedAt      string         `db:"created_at"      json:"created_at"`
 	UpdatedAt      string         `db:"updated_at"      json:"updated_at"`
 }

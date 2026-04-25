@@ -22,8 +22,8 @@
     const userInfo = document.getElementById('user-info');
 
     document.getElementById('btn-logout').addEventListener('click', () => {
-        fetch('/leaving/auth/logout', { method: 'POST' }).then(() => {
-            window.location.href = '/leaving/login';
+        fetch('/auth/logout', { method: 'POST' }).then(() => {
+            window.location.href = '/login';
         });
     });
 

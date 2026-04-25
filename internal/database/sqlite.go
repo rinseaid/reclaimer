@@ -192,6 +192,7 @@ CREATE TABLE IF NOT EXISTS viewer_users (
     auth_provider_id TEXT,
     avatar_url       TEXT,
     is_active        BOOLEAN NOT NULL DEFAULT 1,
+    is_admin         BOOLEAN NOT NULL DEFAULT 0,
     created_at       TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at       TEXT NOT NULL DEFAULT (datetime('now')),
     UNIQUE(auth_provider, auth_provider_id)

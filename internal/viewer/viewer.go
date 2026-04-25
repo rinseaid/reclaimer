@@ -18,32 +18,29 @@ type Server struct {
 	TemplateDir string
 }
 
-func (s *Server) Routes() chi.Router {
+// AuthRoutes returns routes mounted at /auth (public, no session required).
+func (s *Server) AuthRoutes() chi.Router {
 	r := chi.NewRouter()
+	r.Get("/status", s.handleAuthStatus)
+	r.Post("/logout", s.handleLogout)
+	r.Post("/login", s.handleLocalLogin)
+	r.Post("/register", s.handleLocalRegister)
+	r.Post("/plex/pin", s.handlePlexPin)
+	r.Get("/plex/pin/{pinId}", s.handlePlexPinCheck)
+	r.Post("/jellyfin/login", s.handleJellyfinLogin)
+	r.Get("/oidc/authorize", s.handleOIDCAuthorize)
+	r.Get("/oidc/callback", s.handleOIDCCallback)
+	r.Get("/me", s.handleMe)
+	return r
+}
 
-	// Auth endpoints (no auth required)
-	r.Get("/auth/status", s.handleAuthStatus)
-	r.Post("/auth/logout", s.handleLogout)
-	r.Post("/auth/login", s.handleLocalLogin)
-	r.Post("/auth/register", s.handleLocalRegister)
-	r.Post("/auth/plex/pin", s.handlePlexPin)
-	r.Get("/auth/plex/pin/{pinId}", s.handlePlexPinCheck)
-	r.Post("/auth/jellyfin/login", s.handleJellyfinLogin)
-	r.Get("/auth/oidc/authorize", s.handleOIDCAuthorize)
-	r.Get("/auth/oidc/callback", s.handleOIDCCallback)
-	r.Get("/auth/me", s.handleMe)
-
-	// Login page (no auth)
-	r.Get("/login", s.handleLoginPage)
-
-	// Protected routes
-	r.Group(func(r chi.Router) {
-		r.Use(s.requireViewer)
-		r.Get("/", s.handleLeavingPage)
-		r.Get("/items", s.handleLeavingItems)
-		r.Post("/items/{ratingKey}/keep", s.handleKeepItem)
-	})
-
+// LeavingRoutes returns routes mounted at /leaving (requires auth).
+func (s *Server) LeavingRoutes() chi.Router {
+	r := chi.NewRouter()
+	r.Use(s.requireAuth)
+	r.Get("/", s.handleLeavingPage)
+	r.Get("/items", s.handleLeavingItems)
+	r.Post("/items/{ratingKey}/keep", s.handleKeepItem)
 	return r
 }
 
@@ -78,7 +75,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	if isJSONRequest(r) {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
 	} else {
-		http.Redirect(w, r, "/leaving/login", http.StatusSeeOther)
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 	}
 }
 
@@ -88,7 +85,16 @@ func (s *Server) handleMe(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "not authenticated"})
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"user": user})
+	displayName := user.Username
+	if user.DisplayName.Valid && user.DisplayName.String != "" {
+		displayName = user.DisplayName.String
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"user": map[string]any{
+		"id":           user.ID,
+		"username":     user.Username,
+		"display_name": displayName,
+		"is_admin":     user.IsAdmin,
+	}})
 }
 
 func writeJSON(w http.ResponseWriter, status int, v any) {
