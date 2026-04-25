@@ -417,17 +417,17 @@
             allItems.forEach(i => itemGenres(i).forEach(g => genreSet.add(g)));
             const genres = [...genreSet].sort();
             buildChips(document.getElementById('genre-chips'), genres, activeGenres);
-            if (genres.length <= 1) document.getElementById('genre-filter').classList.add('hidden');
+            if (genres.length === 0) document.getElementById('genre-filter').classList.add('hidden');
 
             const ratings = [...new Set(allItems.map(i => i.content_rating).filter(Boolean))].sort();
             buildChips(document.getElementById('rating-chips'), ratings, activeRatings);
-            if (ratings.length <= 1) document.getElementById('rating-filter').classList.add('hidden');
+            if (ratings.length === 0) document.getElementById('rating-filter').classList.add('hidden');
 
             const decades = [...new Set(allItems.map(i => itemDecade(i)).filter(d => d !== null))].sort();
             buildChips(document.getElementById('year-chips'), decades, activeDecades);
-            if (decades.length <= 1) document.getElementById('year-filter').classList.add('hidden');
+            if (decades.length === 0) document.getElementById('year-filter').classList.add('hidden');
 
-            const anyFilters = collections.length > 1 || genres.length > 1 || ratings.length > 1 || decades.length > 1;
+            const anyFilters = collections.length > 1 || genres.length > 0 || ratings.length > 0 || decades.length > 0;
             if (!anyFilters) document.getElementById('filter-bar').classList.add('hidden');
 
             render();
