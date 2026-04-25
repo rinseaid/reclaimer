@@ -179,6 +179,11 @@ func (c *Config) reloadCache() {
 }
 
 func (c *Config) Get(key string) any {
+	if def, ok := defaults[key]; ok && def.EnvVar != "" {
+		if envVal := os.Getenv(def.EnvVar); envVal != "" {
+			return coerce(key, envVal)
+		}
+	}
 	c.mu.RLock()
 	v, ok := c.cache[key]
 	c.mu.RUnlock()
