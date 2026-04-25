@@ -78,32 +78,6 @@
     <button type="button" onclick="testConnection('jellyfin')"
             class="rounded-md px-3 py-1.5 text-sm font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent">Test Connection</button>
 
-    <hr class="border-zinc-700 my-5">
-
-    <div class="mb-4">
-        <label class="block text-sm font-medium text-zinc-300 mb-1">Movies Library ID</label>
-        <input type="text" name="jellyfin_movies_section" placeholder="e.g. a1b2c3d4..."
-               class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
-        <p class="text-xs text-zinc-500 mt-1">The Jellyfin library ID for your Movies library. You can find this in the URL when browsing a library in Jellyfin.</p>
-    </div>
-    <div class="mb-4">
-        <label class="block text-sm font-medium text-zinc-300 mb-1">TV Library ID</label>
-        <input type="text" name="jellyfin_tv_section" placeholder="e.g. e5f6g7h8..."
-               class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
-        <p class="text-xs text-zinc-500 mt-1">The Jellyfin library ID for your TV Shows library.</p>
-    </div>
-    <div class="mb-4">
-        <label class="block text-sm font-medium text-zinc-300 mb-1">Movies Keep Collection</label>
-        <input type="text" name="jellyfin_movies_keep_collection" placeholder="e.g. Keepers"
-               class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
-        <p class="text-xs text-zinc-500 mt-1">Name of a Jellyfin collection whose items are protected from removal. Leave blank to disable.</p>
-    </div>
-    <div>
-        <label class="block text-sm font-medium text-zinc-300 mb-1">TV Keep Collection</label>
-        <input type="text" name="jellyfin_tv_keep_collection" placeholder="e.g. Keepers"
-               class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
-        <p class="text-xs text-zinc-500 mt-1">Name of a Jellyfin collection whose TV shows are protected from removal. Leave blank to disable.</p>
-    </div>
 </div>
 
 <!-- Sticky save bar -->
@@ -165,8 +139,6 @@
         const allKeys = [
             'plex_url', 'plex_token',
             'jellyfin_url', 'jellyfin_public_url', 'jellyfin_api_key',
-            'jellyfin_movies_section', 'jellyfin_tv_section',
-            'jellyfin_movies_keep_collection', 'jellyfin_tv_keep_collection',
         ];
 
         for (const key of allKeys) {

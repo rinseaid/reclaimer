@@ -103,8 +103,13 @@ func (s *Server) Routes() chi.Router {
 		r.Get("/watch/segments", s.handleWatchSegments)
 	})
 
-	// Users
+	// Users (Plex/Jellyfin synced)
 	r.Get("/users", s.handleListUsers)
+
+	// Viewer users (auth system)
+	r.Get("/viewer-users", s.handleListViewerUsers)
+	r.Patch("/viewer-users/{id}", s.handleUpdateViewerUser)
+	r.Delete("/viewer-users/{id}", s.handleDeleteViewerUser)
 
 	// Instances
 	r.Route("/instances", func(r chi.Router) {
@@ -2075,4 +2080,63 @@ func (s *Server) handlePoster(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("ETag", etag)
 	w.Header().Set("Cache-Control", "public, max-age=86400")
 	w.Write(body)
+}
+
+// ---------------------------------------------------------------------------
+// Viewer user management
+// ---------------------------------------------------------------------------
+
+func (s *Server) handleListViewerUsers(w http.ResponseWriter, r *http.Request) {
+	rows, err := s.DB.Queryx("SELECT id, username, display_name, email, auth_provider, avatar_url, is_active, is_admin, created_at, updated_at FROM viewer_users ORDER BY id")
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	var users []map[string]any
+	for rows.Next() {
+		row := make(map[string]any)
+		if err := rows.MapScan(row); err != nil {
+			continue
+		}
+		for k, v := range row {
+			if b, ok := v.([]byte); ok {
+				row[k] = string(b)
+			}
+		}
+		users = append(users, row)
+	}
+	if users == nil {
+		users = []map[string]any{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"users": users})
+}
+
+func (s *Server) handleUpdateViewerUser(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	var body struct {
+		IsAdmin  *bool `json:"is_admin"`
+		IsActive *bool `json:"is_active"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "invalid request body"})
+		return
+	}
+
+	if body.IsAdmin != nil {
+		s.DB.Exec(s.DB.Rebind("UPDATE viewer_users SET is_admin = ?, updated_at = datetime('now') WHERE id = ?"), *body.IsAdmin, id)
+	}
+	if body.IsActive != nil {
+		s.DB.Exec(s.DB.Rebind("UPDATE viewer_users SET is_active = ?, updated_at = datetime('now') WHERE id = ?"), *body.IsActive, id)
+	}
+
+	writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
+}
+
+func (s *Server) handleDeleteViewerUser(w http.ResponseWriter, r *http.Request) {
+	id := chi.URLParam(r, "id")
+	s.DB.Exec(s.DB.Rebind("DELETE FROM viewer_sessions WHERE user_id = ?"), id)
+	s.DB.Exec(s.DB.Rebind("DELETE FROM viewer_users WHERE id = ?"), id)
+	writeJSON(w, http.StatusOK, map[string]string{"status": "deleted"})
 }

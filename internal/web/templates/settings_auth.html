@@ -1,0 +1,254 @@
+{{define "content"}}
+<div class="mb-6">
+    <h2 class="text-2xl font-bold text-zinc-100">Authentication</h2>
+    <p class="text-sm text-zinc-400 mt-1">Configure how users sign in to Reclaimer</p>
+</div>
+
+<!-- Plex -->
+<div class="bg-zinc-900 rounded-lg p-6 border border-zinc-800 mb-6">
+    <div class="flex items-center justify-between mb-2">
+        <h3 class="text-lg font-semibold text-zinc-100">Plex</h3>
+        <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="toggle-plex" class="w-4 h-4 rounded accent-indigo-500" onchange="toggleProvider('viewer_plex_enabled', this.checked)">
+            <span class="text-sm text-zinc-400">Enabled</span>
+        </label>
+    </div>
+    <p class="text-xs text-zinc-500" id="plex-status"></p>
+</div>
+
+<!-- Jellyfin -->
+<div class="bg-zinc-900 rounded-lg p-6 border border-zinc-800 mb-6">
+    <div class="flex items-center justify-between mb-2">
+        <h3 class="text-lg font-semibold text-zinc-100">Jellyfin</h3>
+        <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="toggle-jellyfin" class="w-4 h-4 rounded accent-indigo-500" onchange="toggleProvider('viewer_jellyfin_enabled', this.checked)">
+            <span class="text-sm text-zinc-400">Enabled</span>
+        </label>
+    </div>
+    <p class="text-xs text-zinc-500" id="jellyfin-status"></p>
+</div>
+
+<!-- OIDC -->
+<div class="bg-zinc-900 rounded-lg p-6 border border-zinc-800 mb-6">
+    <div class="flex items-center justify-between mb-2">
+        <h3 class="text-lg font-semibold text-zinc-100">OIDC / SSO</h3>
+        <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="toggle-oidc" class="w-4 h-4 rounded accent-indigo-500" onchange="toggleProvider('viewer_oidc_enabled', this.checked)">
+            <span class="text-sm text-zinc-400">Enabled</span>
+        </label>
+    </div>
+    <p class="text-xs text-zinc-500 mb-4">Authenticate via any OpenID Connect provider (Authelia, Authentik, Keycloak, etc.)</p>
+
+    <form id="oidc-form" class="space-y-4">
+        <div>
+            <label class="block text-sm font-medium text-zinc-300 mb-1">Display Name</label>
+            <input type="text" name="viewer_oidc_display_name" placeholder="SSO"
+                   class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+            <p class="text-xs text-zinc-500 mt-1">Name shown on the login button. Defaults to "SSO".</p>
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-zinc-300 mb-1">Issuer URL</label>
+            <input type="text" name="viewer_oidc_issuer_url" placeholder="https://auth.example.com"
+                   class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+            <p class="text-xs text-zinc-500 mt-1">The OIDC provider's issuer URL (must support discovery at <code class="text-xs bg-zinc-800 px-1 py-0.5 rounded">/.well-known/openid-configuration</code>).</p>
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-zinc-300 mb-1">Client ID</label>
+            <input type="text" name="viewer_oidc_client_id" placeholder=""
+                   class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-zinc-300 mb-1">Client Secret</label>
+            <input type="password" name="viewer_oidc_client_secret" placeholder="(unchanged)"
+                   class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+            <p class="text-xs text-zinc-500 mt-1">Leave empty to keep the current saved secret.</p>
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-zinc-300 mb-1">Redirect URI</label>
+            <input type="text" name="viewer_oidc_redirect_uri" placeholder="https://reclaimer.example.com/auth/oidc/callback"
+                   class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+            <p class="text-xs text-zinc-500 mt-1">Must match what's registered with your OIDC provider.</p>
+        </div>
+        <div>
+            <label class="block text-sm font-medium text-zinc-300 mb-1">Scopes</label>
+            <input type="text" name="viewer_oidc_scopes" placeholder="openid profile email"
+                   class="w-full rounded-md bg-zinc-800 border border-zinc-700 text-zinc-100 px-3 py-2 text-sm placeholder-zinc-500 focus:outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500">
+            <p class="text-xs text-zinc-500 mt-1">Space-separated OIDC scopes. Defaults to "openid profile email".</p>
+        </div>
+        <button type="submit" id="oidc-save-btn"
+                class="rounded-md px-3 py-1.5 text-sm font-medium bg-indigo-500 hover:bg-indigo-400 text-white">Save OIDC Settings</button>
+    </form>
+</div>
+
+<!-- Local Auth -->
+<div class="bg-zinc-900 rounded-lg p-6 border border-zinc-800 mb-6">
+    <div class="flex items-center justify-between mb-2">
+        <h3 class="text-lg font-semibold text-zinc-100">Local Accounts</h3>
+        <label class="flex items-center gap-2 cursor-pointer">
+            <input type="checkbox" id="toggle-local" class="w-4 h-4 rounded accent-indigo-500" onchange="toggleProvider('viewer_local_enabled', this.checked)">
+            <span class="text-sm text-zinc-400">Enabled</span>
+        </label>
+    </div>
+    <p class="text-xs text-zinc-500">Allow users to register and sign in with a username and password stored locally.</p>
+</div>
+
+<!-- Users -->
+<div class="bg-zinc-900 rounded-lg p-6 border border-zinc-800">
+    <h3 class="text-lg font-semibold text-zinc-100 mb-4">Users</h3>
+    <div id="users-loading" class="text-sm text-zinc-500">Loading...</div>
+    <table id="users-table" class="hidden w-full text-sm">
+        <thead>
+            <tr class="text-left text-zinc-400 border-b border-zinc-800">
+                <th class="pb-2 font-medium">User</th>
+                <th class="pb-2 font-medium">Provider</th>
+                <th class="pb-2 font-medium">Admin</th>
+                <th class="pb-2 font-medium">Active</th>
+                <th class="pb-2 font-medium"></th>
+            </tr>
+        </thead>
+        <tbody id="users-body"></tbody>
+    </table>
+</div>
+
+<script>
+(function() {
+    const sensitiveKeys = new Set(['viewer_oidc_client_secret']);
+
+    function loadSettings() {
+        fetch('/api/settings').then(r => r.json()).then(data => {
+            // Provider toggles
+            document.getElementById('toggle-plex').checked = data.viewer_plex_enabled === 'true' || data.viewer_plex_enabled === true;
+            document.getElementById('toggle-jellyfin').checked = data.viewer_jellyfin_enabled === 'true' || data.viewer_jellyfin_enabled === true;
+            document.getElementById('toggle-oidc').checked = data.viewer_oidc_enabled === 'true' || data.viewer_oidc_enabled === true;
+            document.getElementById('toggle-local').checked = data.viewer_local_enabled === 'true' || data.viewer_local_enabled === true;
+
+            // Plex status
+            const plexEl = document.getElementById('plex-status');
+            if (data.plex_url) {
+                plexEl.textContent = 'Plex server configured at ' + data.plex_url;
+                plexEl.className = 'text-xs text-emerald-500';
+            } else {
+                plexEl.textContent = 'Configure your Plex server in Media Servers settings first.';
+                plexEl.className = 'text-xs text-zinc-500';
+                document.getElementById('toggle-plex').disabled = true;
+            }
+
+            // Jellyfin status
+            const jfEl = document.getElementById('jellyfin-status');
+            if (data.jellyfin_url) {
+                jfEl.textContent = 'Jellyfin server configured at ' + data.jellyfin_url;
+                jfEl.className = 'text-xs text-emerald-500';
+            } else {
+                jfEl.textContent = 'Configure your Jellyfin server in Media Servers settings first.';
+                jfEl.className = 'text-xs text-zinc-500';
+                document.getElementById('toggle-jellyfin').disabled = true;
+            }
+
+            // OIDC fields
+            const oidcKeys = ['viewer_oidc_display_name', 'viewer_oidc_issuer_url', 'viewer_oidc_client_id', 'viewer_oidc_redirect_uri', 'viewer_oidc_scopes'];
+            for (const key of oidcKeys) {
+                const el = document.querySelector(`[name="${key}"]`);
+                if (el && data[key]) el.value = data[key];
+            }
+        });
+    }
+
+    window.toggleProvider = function(key, enabled) {
+        fetch('/api/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ [key]: enabled })
+        });
+    };
+
+    document.getElementById('oidc-form').addEventListener('submit', function(e) {
+        e.preventDefault();
+        const formData = new FormData(e.target);
+        const updates = {};
+        const oidcKeys = ['viewer_oidc_display_name', 'viewer_oidc_issuer_url', 'viewer_oidc_client_id', 'viewer_oidc_client_secret', 'viewer_oidc_redirect_uri', 'viewer_oidc_scopes'];
+        for (const key of oidcKeys) {
+            if (sensitiveKeys.has(key)) {
+                const val = formData.get(key);
+                if (val && val.trim() !== '') updates[key] = val;
+            } else {
+                updates[key] = formData.get(key) ?? '';
+            }
+        }
+
+        const btn = document.getElementById('oidc-save-btn');
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+        fetch('/api/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(updates)
+        })
+        .then(r => {
+            btn.textContent = r.ok ? 'Saved' : 'Error';
+            btn.classList.toggle('bg-emerald-600', r.ok);
+            btn.classList.toggle('bg-red-600', !r.ok);
+            setTimeout(() => {
+                btn.textContent = 'Save OIDC Settings';
+                btn.disabled = false;
+                btn.className = 'rounded-md px-3 py-1.5 text-sm font-medium bg-indigo-500 hover:bg-indigo-400 text-white';
+            }, 2000);
+        });
+    });
+
+    function loadUsers() {
+        fetch('/api/viewer-users').then(r => r.json()).then(data => {
+            document.getElementById('users-loading').classList.add('hidden');
+            const table = document.getElementById('users-table');
+            const body = document.getElementById('users-body');
+            table.classList.remove('hidden');
+            body.innerHTML = '';
+
+            (data.users || []).forEach(u => {
+                const tr = document.createElement('tr');
+                tr.className = 'border-b border-zinc-800/50';
+                const displayName = u.display_name || u.username;
+                const isAdmin = u.is_admin === true || u.is_admin === 1 || u.is_admin === '1';
+                const isActive = u.is_active === true || u.is_active === 1 || u.is_active === '1';
+                tr.innerHTML = `
+                    <td class="py-2 text-zinc-100">${escapeHtml(displayName)} <span class="text-zinc-500 text-xs">${escapeHtml(u.username)}</span></td>
+                    <td class="py-2 text-zinc-400">${escapeHtml(u.auth_provider)}</td>
+                    <td class="py-2"><input type="checkbox" ${isAdmin ? 'checked' : ''} onchange="updateUser(${u.id}, 'is_admin', this.checked)" class="w-4 h-4 rounded accent-indigo-500"></td>
+                    <td class="py-2"><input type="checkbox" ${isActive ? 'checked' : ''} onchange="updateUser(${u.id}, 'is_active', this.checked)" class="w-4 h-4 rounded accent-indigo-500"></td>
+                    <td class="py-2 text-right">
+                        <button onclick="deleteUser(${u.id}, '${escapeHtml(u.username)}')" class="text-xs text-red-400 hover:text-red-300">Delete</button>
+                    </td>
+                `;
+                body.appendChild(tr);
+            });
+
+            if ((data.users || []).length === 0) {
+                body.innerHTML = '<tr><td colspan="5" class="py-4 text-center text-zinc-500">No users yet</td></tr>';
+            }
+        });
+    }
+
+    window.updateUser = function(id, field, value) {
+        fetch('/api/viewer-users/' + id, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ [field]: value })
+        });
+    };
+
+    window.deleteUser = function(id, username) {
+        if (!confirm('Delete user "' + username + '"? This cannot be undone.')) return;
+        fetch('/api/viewer-users/' + id, { method: 'DELETE' }).then(() => loadUsers());
+    };
+
+    function escapeHtml(s) {
+        if (!s) return '';
+        const d = document.createElement('div');
+        d.textContent = s;
+        return d.innerHTML;
+    }
+
+    loadSettings();
+    loadUsers();
+})();
+</script>
+{{end}}
