@@ -79,4 +79,5 @@ func (s *Server) Routes(r chi.Router) {
 	r.Get("/settings/downloads", s.render("settings_downloads.html", "Downloaders", nil))
 	r.Get("/settings/notifications", s.render("settings_notifications.html", "Notifications", nil))
 	r.Get("/settings/schedule", s.render("settings_schedule.html", "Schedule", nil))
+	r.Get("/settings/auth", s.render("settings_auth.html", "Authentication", nil))
 }
