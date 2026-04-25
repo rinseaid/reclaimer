@@ -1425,6 +1425,21 @@ func (o *Orchestrator) processCollection(
 	total := len(items)
 	graceDate := addDaysISO(today, criteria.GraceDays)
 
+	// Safety check: if the library returned zero items but we have tracked
+	// items, skip processing entirely. This prevents mass removal when a
+	// media server is temporarily unreachable or returns an empty response.
+	if total == 0 {
+		var trackedCount int
+		o.DB.Get(&trackedCount,
+			o.DB.Rebind("SELECT COUNT(*) FROM items WHERE collection = ? AND status = ?"),
+			collectionName, string(models.StatusStaged))
+		if trackedCount > 0 {
+			slog.Warn("Library returned 0 items but collection has tracked items, skipping to prevent mass removal",
+				"collection", collectionName, "tracked", trackedCount)
+			return 0, 0, 0
+		}
+	}
+
 	// Clear previous rule_results for this collection.
 	o.DB.Exec(o.DB.Rebind("DELETE FROM rule_results WHERE collection = ?"), collectionName)
 
