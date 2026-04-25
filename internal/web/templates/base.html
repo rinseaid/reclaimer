@@ -487,25 +487,11 @@
             {{end}}
         </nav>
         <!-- User + theme (bottom-left). -->
-        <div class="hidden md:block mt-4 pt-3 border-t border-zinc-700">
-            <div id="sidebar-user" class="flex items-center justify-between px-3 py-2 mb-2">
-                <span id="sidebar-username" class="text-xs text-zinc-400 truncate"></span>
-                <button id="sidebar-logout" class="text-xs text-zinc-500 hover:text-zinc-300 transition-colors">Sign out</button>
+        <div class="hidden md:block mt-auto pt-3 border-t border-zinc-700 space-y-1">
+            <div id="sidebar-user" class="flex items-center justify-between px-3 py-1.5">
+                <span id="sidebar-username" class="text-sm text-zinc-400 truncate"></span>
+                <button id="sidebar-logout" class="text-sm text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer">Sign out</button>
             </div>
-            <script>
-            (function() {
-                fetch('/auth/me').then(r => r.json()).then(data => {
-                    if (data.user) {
-                        document.getElementById('sidebar-username').textContent = data.user.display_name || data.user.username;
-                    }
-                }).catch(() => {});
-                document.getElementById('sidebar-logout').addEventListener('click', () => {
-                    fetch('/auth/logout', { method: 'POST' }).then(() => { window.location.href = '/login'; });
-                });
-            })();
-            </script>
-        </div>
-        <div class="hidden md:block">
             <button type="button" id="reclaimer-theme-toggle" class="theme-toggle" aria-label="Cycle theme (dark, light, auto)" title="Click to cycle: dark → light → auto">
                 <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
                     <path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/>
@@ -522,6 +508,18 @@
                 <span class="label-light">Light mode</span>
                 <span class="label-auto">Auto mode</span>
             </button>
+            <script>
+            (function() {
+                fetch('/auth/me').then(r => r.json()).then(data => {
+                    if (data.user) {
+                        document.getElementById('sidebar-username').textContent = data.user.display_name || data.user.username;
+                    }
+                }).catch(() => {});
+                document.getElementById('sidebar-logout').addEventListener('click', () => {
+                    fetch('/auth/logout', { method: 'POST' }).then(() => { window.location.href = '/login'; });
+                });
+            })();
+            </script>
         </div>
     </aside>
     <style>
