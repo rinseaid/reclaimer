@@ -76,7 +76,7 @@
                     });
                 }
 
-                if (data.bootstrap || data.local?.enabled) {
+                if (data.bootstrap || data.local?.enabled || data.local?.has_users) {
                     any = true;
                     providers.insertAdjacentHTML('beforeend', `
                         <div id="local-form" class="space-y-2">
