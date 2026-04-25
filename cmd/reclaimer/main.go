@@ -104,14 +104,6 @@ func main() {
 	r.Use(middleware.Recoverer)
 	r.Use(middleware.Compress(5))
 
-	apiServer := &api.Server{
-		Store:        st,
-		Config:       cfg,
-		DB:           db,
-		Orchestrator: orch,
-	}
-	r.Mount("/api", apiServer.Routes())
-
 	tmplDir := os.Getenv("TEMPLATE_DIR")
 	if tmplDir == "" {
 		tmplDir = "/app/templates"
@@ -123,14 +115,35 @@ func main() {
 		DB:          db,
 		TemplateDir: tmplDir,
 	}
-	r.Mount("/leaving", viewerServer.Routes())
+
+	// Public routes (no auth)
+	r.Get("/healthz", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusOK) })
+	r.Mount("/auth", viewerServer.AuthRoutes())
+	r.Get("/login", viewerServer.HandleLoginPage())
 	r.Get("/keep/{token}", viewerServer.HandleMagicKeep)
+
+	// Viewer routes (any authenticated user)
+	r.Mount("/leaving", viewerServer.LeavingRoutes())
+
+	// Admin routes (authenticated + is_admin)
+	r.Group(func(r chi.Router) {
+		r.Use(viewerServer.RequireAdmin)
+
+		apiServer := &api.Server{
+			Store:        st,
+			Config:       cfg,
+			DB:           db,
+			Orchestrator: orch,
+		}
+		r.Mount("/api", apiServer.Routes())
+
+		webServer := &web.Server{TemplateDir: tmplDir}
+		webServer.Routes(r)
+	})
 
 	sched.AddFunc("viewer_session_cleanup", "@every 1h", func() {
 		viewerServer.CleanupSessions()
 	})
-	webServer := &web.Server{TemplateDir: tmplDir}
-	webServer.Routes(r)
 
 	staticSub, err := fs.Sub(staticFS, "static")
 	if err == nil {

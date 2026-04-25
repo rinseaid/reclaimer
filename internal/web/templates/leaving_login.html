@@ -1,7 +1,10 @@
 {{define "content"}}
 <div class="flex flex-col items-center justify-center min-h-[60vh]">
-    <h1 class="text-2xl font-bold text-zinc-100 mb-2">What's Leaving</h1>
-    <p class="text-zinc-400 text-sm mb-8">Sign in to see what's being removed and keep what you love.</p>
+    <div class="flex items-center gap-2.5 mb-2">
+        <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" class="w-8 h-8 text-indigo-500 shrink-0" fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="round" stroke-linejoin="round"><path d="M105 60a45 45 0 1 1-45-45c12.6 0 24.65 5 33.7 13.7L105 40"/><path d="M105 15v25h-25"/></svg>
+        <h1 class="text-2xl font-bold tracking-wide bg-gradient-to-br from-indigo-500 to-violet-400 bg-clip-text text-transparent">Reclaimer</h1>
+    </div>
+    <p class="text-zinc-400 text-sm mb-8">Sign in to continue.</p>
 
     <div id="auth-providers" class="w-full max-w-sm space-y-3">
         <div class="text-center text-zinc-500 text-sm">Loading...</div>
@@ -20,7 +23,7 @@
         errorEl.classList.remove('hidden');
     }
 
-    fetch('/leaving/auth/status')
+    fetch('/auth/status')
         .then(r => r.json())
         .then(data => {
             providers.innerHTML = '';
@@ -62,7 +65,7 @@
                     </button>
                 `);
                 document.getElementById('btn-oidc').addEventListener('click', () => {
-                    window.location.href = '/leaving/auth/oidc/authorize';
+                    window.location.href = '/auth/oidc/authorize';
                 });
             }
 
@@ -93,7 +96,7 @@
         btn.disabled = true;
         btn.textContent = 'Opening Plex...';
 
-        fetch('/leaving/auth/plex/pin', { method: 'POST' })
+        fetch('/auth/plex/pin', { method: 'POST' })
             .then(r => r.json())
             .then(data => {
                 if (data.error) { showError(data.error); btn.disabled = false; btn.textContent = 'Sign in with Plex'; return; }
@@ -109,10 +112,10 @@
         const iv = setInterval(() => {
             attempts++;
             if (attempts > 60) { clearInterval(iv); btn.disabled = false; btn.textContent = 'Sign in with Plex'; showError('Plex auth timed out'); return; }
-            fetch('/leaving/auth/plex/pin/' + pinId)
+            fetch('/auth/plex/pin/' + pinId)
                 .then(r => r.json())
                 .then(data => {
-                    if (data.status === 'authenticated') { clearInterval(iv); window.location.href = '/leaving'; }
+                    if (data.status === 'authenticated') { clearInterval(iv); window.location.href = '/'; }
                     else if (data.error) { clearInterval(iv); showError(data.error); btn.disabled = false; btn.textContent = 'Sign in with Plex'; }
                 });
         }, 2000);
@@ -123,7 +126,7 @@
         const pass = document.getElementById('jf-pass').value;
         if (!user) { showError('Username is required'); return; }
 
-        fetch('/leaving/auth/jellyfin/login', {
+        fetch('/auth/jellyfin/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: user, password: pass })
@@ -131,7 +134,7 @@
         .then(r => r.json())
         .then(data => {
             if (data.error) showError(data.error);
-            else window.location.href = '/leaving';
+            else window.location.href = '/';
         })
         .catch(() => showError('Failed to authenticate'));
     }
@@ -141,7 +144,7 @@
         const pass = document.getElementById('local-pass').value;
         if (!user || !pass) { showError('Username and password are required'); return; }
 
-        fetch('/leaving/auth/login', {
+        fetch('/auth/login', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ username: user, password: pass })
@@ -149,7 +152,7 @@
         .then(r => r.json())
         .then(data => {
             if (data.error) showError(data.error);
-            else window.location.href = '/leaving';
+            else window.location.href = '/';
         })
         .catch(() => showError('Failed to authenticate'));
     }
