@@ -102,6 +102,28 @@
         html[data-theme="light"] aside { background-color: #ffffff !important; }
         html[data-theme="light"] ::placeholder { color: #a1a1aa !important; }
 
+        .badge-urgent {
+            background: #dc2626;
+            color: #fff;
+            font-weight: 800;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.5);
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+        .badge-warn {
+            background: #d97706;
+            color: #fff;
+            font-weight: 800;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.4);
+            border: 1px solid rgba(255,255,255,0.3);
+        }
+        .badge-normal {
+            background: rgba(0,0,0,0.75);
+            color: #e4e4e7;
+            font-weight: 700;
+            text-shadow: 0 1px 2px rgba(0,0,0,0.8);
+            border: 1px solid rgba(255,255,255,0.15);
+        }
+
         .poster-card {
             @apply relative rounded-lg overflow-hidden bg-zinc-900 border border-zinc-800
                    transition-all duration-200 hover:border-zinc-600 hover:shadow-lg hover:shadow-black/20;
@@ -110,7 +132,7 @@
             @apply w-full aspect-[2/3] object-cover bg-zinc-800;
         }
         .poster-card .card-body {
-            @apply p-3;
+            @apply p-2;
         }
 
         .filter-chip {

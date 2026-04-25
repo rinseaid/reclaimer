@@ -70,8 +70,14 @@ func (db *DB) migrate() error {
 
 	if db.Dialect == DialectPostgres {
 		db.Exec("ALTER TABLE viewer_users ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE")
+		db.Exec("ALTER TABLE items ADD COLUMN IF NOT EXISTS genre TEXT")
+		db.Exec("ALTER TABLE items ADD COLUMN IF NOT EXISTS content_rating TEXT")
+		db.Exec("ALTER TABLE items ADD COLUMN IF NOT EXISTS year INTEGER")
 	} else {
 		db.Exec("ALTER TABLE viewer_users ADD COLUMN is_admin BOOLEAN NOT NULL DEFAULT 0")
+		db.Exec("ALTER TABLE items ADD COLUMN genre TEXT")
+		db.Exec("ALTER TABLE items ADD COLUMN content_rating TEXT")
+		db.Exec("ALTER TABLE items ADD COLUMN year INTEGER")
 	}
 
 	return nil

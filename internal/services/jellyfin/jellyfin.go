@@ -70,7 +70,7 @@ func FetchLibrary(url, apiKey, libraryID string) ([]map[string]any, error) {
 		"ParentId":         libraryID,
 		"Recursive":        "true",
 		"IncludeItemTypes": "Movie,Series",
-		"Fields":           "ProviderIds,DateCreated,Overview",
+		"Fields":           "ProviderIds,DateCreated,Overview,Genres,OfficialRating,ProductionYear,CommunityRating",
 	}, &envelope)
 	if err != nil {
 		return nil, err

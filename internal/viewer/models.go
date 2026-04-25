@@ -48,4 +48,7 @@ type StagedItem struct {
 	TmdbID         sql.NullInt64  `db:"tmdb_id"          json:"tmdb_id"`
 	ShowRatingKey  sql.NullString `db:"show_rating_key"  json:"show_rating_key"`
 	SeasonNumber   sql.NullInt64  `db:"season_number"    json:"season_number"`
+	Genre          sql.NullString `db:"genre"            json:"genre"`
+	ContentRating  sql.NullString `db:"content_rating"   json:"content_rating"`
+	Year           sql.NullInt64  `db:"year"             json:"year"`
 }
