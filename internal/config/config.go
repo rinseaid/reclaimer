@@ -204,6 +204,8 @@ func (c *Config) GetString(key string) string {
 	switch s := v.(type) {
 	case string:
 		return s
+	case int:
+		return strconv.Itoa(s)
 	case float64:
 		return strconv.FormatFloat(s, 'f', -1, 64)
 	case bool:
