@@ -3,6 +3,7 @@ package viewer
 import (
 	"html/template"
 	"net/http"
+	"strings"
 )
 
 // HandleViewerPage renders the viewer UI using base.html + viewer.html.
@@ -19,7 +20,10 @@ func (s *Server) HandleViewerPage() http.HandlerFunc {
 			displayName = user.DisplayName.String
 		}
 
-		t, err := template.ParseFiles(
+		t, err := template.New("").Funcs(template.FuncMap{
+			"hasPrefix": strings.HasPrefix,
+			"contains":  strings.Contains,
+		}).ParseFiles(
 			tmplDir+"/viewer_base.html",
 			tmplDir+"/viewer.html",
 		)

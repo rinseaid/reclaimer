@@ -85,11 +85,11 @@
         return diff + ' days';
     }
 
-    function urgencyClass(dateStr) {
+    function urgencyBadge(dateStr) {
         const diff = Math.ceil((new Date(dateStr) - new Date()) / 86400000);
-        if (diff <= 3) return 'text-red-400';
-        if (diff <= 7) return 'text-amber-400';
-        return 'text-zinc-500';
+        if (diff <= 3) return 'bg-red-600 text-white';
+        if (diff <= 7) return 'bg-amber-500 text-black';
+        return 'bg-zinc-900/90 text-zinc-200';
     }
 
     function escapeHtml(s) {
@@ -172,19 +172,19 @@
         const rk = item.rating_key;
         const title = escapeHtml(item.title || rk);
         const days = daysUntil(item.grace_expires);
-        const uc = urgencyClass(item.grace_expires);
+        const uc = urgencyBadge(item.grace_expires);
 
         const card = document.createElement('div');
         card.className = 'poster-card';
         card.innerHTML = `
             <div class="relative">
-                <img src="/api/items/${encodeURIComponent(rk)}/poster?size=md" loading="lazy" decoding="async" alt=""
+                <img src="/api/items/${encodeURIComponent(rk)}/poster?size=sm" loading="lazy" decoding="async" alt=""
                      onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
                 <div class="hidden w-full aspect-[2/3] bg-zinc-800 items-center justify-center">
                     <svg class="w-10 h-10 text-zinc-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="18" rx="2"/><circle cx="8" cy="9" r="2"/><path d="M22 16l-5-5-3 3-3-3-9 9"/></svg>
                 </div>
                 <div class="absolute top-2 right-2">
-                    <span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${uc} bg-black/60 backdrop-blur-sm">${days}</span>
+                    <span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${uc} shadow">${days}</span>
                 </div>
                 ${isKept ? '<div class="absolute top-2 left-2"><span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase bg-emerald-500/80 text-white">Kept</span></div>' : ''}
             </div>
@@ -204,7 +204,7 @@
         const posterRk = show.show_rating_key || rk;
         const title = escapeHtml(show.title || posterRk);
         const days = daysUntil(show.earliest_expires);
-        const uc = urgencyClass(show.earliest_expires);
+        const uc = urgencyBadge(show.earliest_expires);
         const count = show.seasons.length;
 
         const card = document.createElement('div');
@@ -212,13 +212,13 @@
         card.addEventListener('click', () => openShowModal(show));
         card.innerHTML = `
             <div class="relative">
-                <img src="/api/items/${encodeURIComponent(posterRk)}/poster?size=md" loading="lazy" decoding="async" alt=""
+                <img src="/api/items/${encodeURIComponent(posterRk)}/poster?size=sm" loading="lazy" decoding="async" alt=""
                      onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">
                 <div class="hidden w-full aspect-[2/3] bg-zinc-800 items-center justify-center">
                     <svg class="w-10 h-10 text-zinc-700" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="2" y="3" width="20" height="18" rx="2"/><circle cx="8" cy="9" r="2"/><path d="M22 16l-5-5-3 3-3-3-9 9"/></svg>
                 </div>
                 <div class="absolute top-2 right-2">
-                    <span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${uc} bg-black/60 backdrop-blur-sm">${days}</span>
+                    <span class="px-1.5 py-0.5 rounded text-[10px] font-bold uppercase ${uc} shadow">${days}</span>
                 </div>
                 <div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent px-2 pb-1.5 pt-4">
                     <span class="text-[10px] font-semibold text-zinc-300">${count} season${count !== 1 ? 's' : ''}</span>
@@ -245,7 +245,7 @@
         for (const season of sorted) {
             const isKept = season.override === 'keep';
             const days = daysUntil(season.grace_expires);
-            const uc = urgencyClass(season.grace_expires);
+            const uc = urgencyBadge(season.grace_expires);
             const sn = season.season_number != null ? `Season ${season.season_number}` : escapeHtml(season.title);
             const size = formatSize(season.size_bytes);
 
@@ -259,7 +259,7 @@
                     <div class="text-sm font-medium text-zinc-100">${sn}</div>
                     <div class="flex items-center gap-2 mt-0.5">
                         ${size ? `<span class="text-xs text-zinc-500">${size}</span>` : ''}
-                        <span class="text-xs ${uc}">${days}</span>
+                        <span class="text-xs px-1.5 py-0.5 rounded ${uc}">${days}</span>
                     </div>
                 </div>
                 <div class="shrink-0">
