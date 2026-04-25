@@ -133,6 +133,11 @@ func (s *Server) Routes() chi.Router {
 	return r
 }
 
+// HandlePoster returns the poster handler for use outside admin routes.
+func (s *Server) HandlePoster() http.HandlerFunc {
+	return s.handlePoster
+}
+
 // ---------------------------------------------------------------------------
 // Helpers
 // ---------------------------------------------------------------------------

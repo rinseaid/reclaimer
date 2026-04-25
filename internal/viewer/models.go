@@ -37,13 +37,15 @@ type KeepToken struct {
 }
 
 type StagedItem struct {
-	RatingKey    string         `db:"rating_key"     json:"rating_key"`
-	Collection   string         `db:"collection"     json:"collection"`
-	Title        sql.NullString `db:"title"          json:"title"`
-	MediaType    string         `db:"media_type"     json:"media_type"`
-	SizeBytes    int64          `db:"size_bytes"     json:"size_bytes"`
-	GraceExpires string         `db:"grace_expires"  json:"grace_expires"`
-	FirstSeen    string         `db:"first_seen"     json:"first_seen"`
-	Override     sql.NullString `db:"override"       json:"override"`
-	TmdbID       sql.NullInt64  `db:"tmdb_id"        json:"tmdb_id"`
+	RatingKey      string         `db:"rating_key"       json:"rating_key"`
+	Collection     string         `db:"collection"       json:"collection"`
+	Title          sql.NullString `db:"title"            json:"title"`
+	MediaType      string         `db:"media_type"       json:"media_type"`
+	SizeBytes      int64          `db:"size_bytes"       json:"size_bytes"`
+	GraceExpires   string         `db:"grace_expires"    json:"grace_expires"`
+	FirstSeen      string         `db:"first_seen"       json:"first_seen"`
+	Override       sql.NullString `db:"override"         json:"override"`
+	TmdbID         sql.NullInt64  `db:"tmdb_id"          json:"tmdb_id"`
+	ShowRatingKey  sql.NullString `db:"show_rating_key"  json:"show_rating_key"`
+	SeasonNumber   sql.NullInt64  `db:"season_number"    json:"season_number"`
 }

@@ -316,8 +316,8 @@ window.showToast = function(message, kind) {
     let cachedDashboard = null;
 
     Promise.all([
-        fetch('/api/dashboard').then(r => r.json()),
-        fetch('/api/settings').then(r => r.json()),
+        fetch('/admin/api/dashboard').then(r => r.json()),
+        fetch('/admin/api/settings').then(r => r.json()),
     ])
     .then(([data, settings]) => { cachedDashboard = data; render(data, settings); updateRunButtonTooltip(); })
     .catch(err => {
@@ -774,7 +774,7 @@ window.showToast = function(message, kind) {
                     name: attemptName,
                     criteria: { ...tpl.payload.criteria },
                 };
-                resp = await fetch('/api/collections', {
+                resp = await fetch('/admin/api/collections', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify(body),
@@ -794,7 +794,7 @@ window.showToast = function(message, kind) {
             const slug = slugify(createdName);
             document.getElementById('template-dialog').close();
             showToast('Rule created from template', 'success');
-            window.location.href = '/rules/' + slug + '/settings';
+            window.location.href = '/admin/rules/' + slug + '/settings';
         } catch (err) {
             showToast('Failed to create from template: ' + err.message, 'error');
             if (btn) {
@@ -980,8 +980,8 @@ window.showToast = function(message, kind) {
 
             rows += `<tr class="border-b border-zinc-800" data-rule-name="${r.name.replace(/"/g, '&quot;')}">
                 <td class="py-2 px-3">
-                    <a href="/rules/${encodeURIComponent(r.slug)}" class="text-indigo-400 hover:text-indigo-300 no-underline">${r.name}</a>
-                    <a href="/rules/${encodeURIComponent(r.slug)}/settings" title="Settings" class="ml-2 text-zinc-500 hover:text-zinc-300 no-underline align-middle inline-flex"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg></a>
+                    <a href="/admin/rules/${encodeURIComponent(r.slug)}" class="text-indigo-400 hover:text-indigo-300 no-underline">${r.name}</a>
+                    <a href="/admin/rules/${encodeURIComponent(r.slug)}/settings" title="Settings" class="ml-2 text-zinc-500 hover:text-zinc-300 no-underline align-middle inline-flex"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 010 2.83 2 2 0 01-2.83 0l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-2 2 2 2 0 01-2-2v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83 0 2 2 0 010-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 01-2-2 2 2 0 012-2h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 010-2.83 2 2 0 012.83 0l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 012-2 2 2 0 012 2v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 0 2 2 0 010 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 012 2 2 2 0 01-2 2h-.09a1.65 1.65 0 00-1.51 1z"/></svg></a>
                 </td>
                 <td class="py-2 px-3 text-right tabular-nums text-zinc-100">${r.items}</td>
                 <td class="py-2 px-3 text-right tabular-nums">${r.pending > 0 ? '<span class="text-rose-500">' + r.pending + '</span>' : '<span class="text-zinc-100">0</span>'}</td>
@@ -1057,7 +1057,7 @@ window.showToast = function(message, kind) {
                 const originalBorder = inp.style.borderColor;
                 inp.disabled = true;
                 try {
-                    const resp = await fetch(`/api/collections/${encodeURIComponent(name)}/config`, {
+                    const resp = await fetch(`/admin/api/collections/${encodeURIComponent(name)}/config`, {
                         method: 'PUT',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ priority: val }),
@@ -1085,7 +1085,7 @@ window.showToast = function(message, kind) {
     let currentRunMode = null; // true=dry, false=live (reflects active run)
 
     function checkRunStatus() {
-        fetch('/api/run/progress')
+        fetch('/admin/api/run/progress')
             .then(r => r.json())
             .then(d => {
                 if (d.running) {
@@ -1177,7 +1177,7 @@ window.showToast = function(message, kind) {
     function startPolling() {
         if (pollTimer) return;
         pollTimer = setInterval(() => {
-            fetch('/api/run/progress')
+            fetch('/admin/api/run/progress')
                 .then(r => r.json())
                 .then(d => {
                     if (!d.running) {
@@ -1198,7 +1198,7 @@ window.showToast = function(message, kind) {
                             <div class="flex items-center gap-3">
                                 <strong class="text-emerald-500">${isDry} completed</strong>
                                 <span class="text-zinc-400">${summary}</span>
-                                <a href="/logs" class="ml-auto text-xs text-indigo-400 hover:text-indigo-300">View logs</a>
+                                <a href="/admin/logs" class="ml-auto text-xs text-indigo-400 hover:text-indigo-300">View logs</a>
                                 <button onclick="location.reload()" class="rounded-md px-2 py-1 text-xs font-medium border border-zinc-600 hover:border-zinc-500 text-zinc-300 hover:text-zinc-100 bg-transparent">Refresh</button>
                             </div>`;
                         currentRunMode = null;
@@ -1214,7 +1214,7 @@ window.showToast = function(message, kind) {
         currentRunMode = dryRun;
         // Immediate banner so user sees dry/live mode right away
         showProgress({ phase: '', detail: 'Starting...', percent: 0, items_processed: 0, items_total: 0 }, dryRun);
-        fetch(`/api/run?dry_run=${dryRun}`, { method: 'POST' })
+        fetch(`/admin/api/run?dry_run=${dryRun}`, { method: 'POST' })
             .then(r => r.json())
             .then(d => {
                 if (d.status === 'started' || d.status === 'already_running') {
@@ -1276,7 +1276,7 @@ window.showToast = function(message, kind) {
         kebabExportBtn.addEventListener('click', async () => {
             closeKebab();
             try {
-                const resp = await fetch('/api/collections/export');
+                const resp = await fetch('/admin/api/collections/export');
                 if (!resp.ok) {
                     const err = await resp.json().catch(() => ({}));
                     throw new Error(err.detail || ('HTTP ' + resp.status));
@@ -1364,7 +1364,7 @@ window.showToast = function(message, kind) {
                 confirmBtn.classList.add('opacity-60', 'cursor-not-allowed');
                 try {
                     const body = { ...pendingImport.payload, mode };
-                    const resp = await fetch('/api/collections/import', {
+                    const resp = await fetch('/admin/api/collections/import', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify(body),
@@ -1392,9 +1392,9 @@ window.showToast = function(message, kind) {
                     showToast(msg, 'success');
                     pendingImport = null;
                     // Refetch the dashboard so the table reflects the new rules.
-                    fetch('/api/dashboard').then(r => r.json()).then(d => {
+                    fetch('/admin/api/dashboard').then(r => r.json()).then(d => {
                         cachedDashboard = d;
-                        fetch('/api/settings').then(r => r.json()).then(s => render(d, s));
+                        fetch('/admin/api/settings').then(r => r.json()).then(s => render(d, s));
                     }).catch(() => location.reload());
                 } catch (err) {
                     showToast('Import failed: ' + err.message, 'error');
@@ -1415,7 +1415,7 @@ window.showToast = function(message, kind) {
         btn.disabled = true;
         btn.classList.add('opacity-50', 'cursor-not-allowed');
         try {
-            const resp = await fetch('/api/collections', {
+            const resp = await fetch('/admin/api/collections', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ name }),
@@ -1428,7 +1428,7 @@ window.showToast = function(message, kind) {
             const slug = slugify(data.name || name);
             document.getElementById('create-dialog').close();
             showToast('Rule created', 'success');
-            window.location.href = '/rules/' + slug + '/settings';
+            window.location.href = '/admin/rules/' + slug + '/settings';
         } catch (err) {
             showToast('Failed to create rule: ' + err.message, 'error');
             btn.disabled = false;

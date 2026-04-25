@@ -166,11 +166,11 @@ function titleCell(a) {
     const pillLabel = a.media_type === 'episode' ? 'Show' : 'Movie';
     const rk = a.grandparent_rating_key || a.rating_key;
     const poster = rk
-        ? '<img src="/api/items/' + esc(rk) + '/poster?size=sm" loading="lazy" decoding="async" alt="" '
+        ? '<img src="/admin/api/items/' + esc(rk) + '/poster?size=sm" loading="lazy" decoding="async" alt="" '
           + 'class="w-[40px] h-[60px] object-cover rounded bg-zinc-800 shrink-0" '
           + 'onerror="this.style.visibility=\'hidden\'">'
         : '<span class="w-[40px] h-[60px] rounded bg-zinc-800 shrink-0 inline-block"></span>';
-    const link = '<a href="/items/' + esc(rk) + '" class="text-zinc-100 hover:text-sky-400 truncate font-semibold">' + esc(name) + '</a>';
+    const link = '<a href="/admin/items/' + esc(rk) + '" class="text-zinc-100 hover:text-sky-400 truncate font-semibold">' + esc(name) + '</a>';
     return '<div class="flex items-center gap-2.5 min-w-0">'
         + poster
         + '<span class="min-w-0 flex-1 flex items-center gap-2 flex-wrap">'
@@ -189,7 +189,7 @@ function detailCell(a) {
             epName = epName.substring(a.grandparent_title.length).replace(/^\s*[\u2014\-:]\s*/, '');
         }
         const label = 'S' + s + 'E' + e + (epName ? ' - ' + esc(epName) : '');
-        return '<a href="/items/' + esc(a.rating_key) + '" class="text-zinc-400 hover:text-sky-400 text-[0.85em]">' + label + '</a>';
+        return '<a href="/admin/items/' + esc(a.rating_key) + '" class="text-zinc-400 hover:text-sky-400 text-[0.85em]">' + label + '</a>';
     }
     return '';
 }
@@ -417,7 +417,7 @@ window.addEventListener('popstate', () => {
 async function loadActivity(page) {
     currentPage = page || 1;
     try {
-        const resp = await fetch('/api/activity/watch?' + getFilterParams());
+        const resp = await fetch('/admin/api/activity/watch?' + getFilterParams());
         if (!resp.ok) throw new Error('HTTP ' + resp.status);
         const data = await resp.json();
         renderActivity(data);
@@ -430,7 +430,7 @@ async function loadActivity(page) {
 
 async function loadUsers() {
     try {
-        const resp = await fetch('/api/users');
+        const resp = await fetch('/admin/api/users');
         if (!resp.ok) return;
         const users = await resp.json();
         const sel = document.getElementById('filter-user');

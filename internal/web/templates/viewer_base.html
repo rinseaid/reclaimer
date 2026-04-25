@@ -1,0 +1,212 @@
+{{define "viewer_base.html"}}
+<!DOCTYPE html>
+<html lang="en" class="dark" data-theme="dark">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>{{.Title}}</title>
+    <link rel="icon" type="image/svg+xml" href="/static/icon.svg">
+    <script>
+    (function () {
+        try {
+            const saved = localStorage.getItem('reclaimer-theme');
+            const pref = (saved === 'dark' || saved === 'light') ? saved : 'auto';
+            const resolved = pref === 'auto'
+                ? (window.matchMedia('(prefers-color-scheme: light)').matches ? 'light' : 'dark')
+                : pref;
+            const html = document.documentElement;
+            html.setAttribute('data-theme', resolved);
+            html.setAttribute('data-theme-pref', pref);
+            html.classList.toggle('dark', resolved === 'dark');
+        } catch (_) {}
+    })();
+    </script>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+    tailwindcss.config = {
+        darkMode: 'class',
+        theme: {
+            extend: {
+                colors: {
+                    accent: '#6366f1',
+                }
+            }
+        }
+    }
+    </script>
+    <style type="text/tailwindcss">
+        .nav-link {
+            @apply flex items-center gap-2 px-3 py-2 rounded-md text-sm
+                   text-zinc-400 border-l-[3px] border-transparent
+                   transition-all duration-150
+                   hover:bg-indigo-500/10 hover:text-zinc-100;
+        }
+        .nav-link[aria-current="page"] {
+            @apply border-l-indigo-500 bg-indigo-500/10 text-zinc-100 font-semibold;
+        }
+        .nav-link .nav-icon {
+            @apply w-5 h-5 shrink-0;
+        }
+
+        @media (max-width: 768px) {
+            .nav-link {
+                @apply border-l-0 border-b-[3px] border-transparent px-2.5 py-1.5;
+            }
+            .nav-link[aria-current="page"] {
+                @apply border-l-transparent border-b-indigo-500;
+            }
+        }
+
+        .theme-toggle {
+            @apply flex items-center gap-2 px-3 py-2 rounded-md text-sm
+                   text-zinc-400 hover:bg-indigo-500/10 hover:text-zinc-100
+                   w-full transition-colors cursor-pointer bg-transparent
+                   border border-zinc-700/0 hover:border-zinc-700/40;
+        }
+        .theme-toggle svg { @apply w-5 h-5 shrink-0; }
+        html[data-theme-pref="dark"]  .theme-toggle .icon-sun,
+        html[data-theme-pref="dark"]  .theme-toggle .icon-auto { display: none; }
+        html[data-theme-pref="light"] .theme-toggle .icon-moon,
+        html[data-theme-pref="light"] .theme-toggle .icon-auto { display: none; }
+        html[data-theme-pref="auto"]  .theme-toggle .icon-sun,
+        html[data-theme-pref="auto"]  .theme-toggle .icon-moon { display: none; }
+
+        html[data-theme-pref="dark"]  .theme-toggle .label-light,
+        html[data-theme-pref="dark"]  .theme-toggle .label-auto  { display: none; }
+        html[data-theme-pref="light"] .theme-toggle .label-dark,
+        html[data-theme-pref="light"] .theme-toggle .label-auto  { display: none; }
+        html[data-theme-pref="auto"]  .theme-toggle .label-dark,
+        html[data-theme-pref="auto"]  .theme-toggle .label-light { display: none; }
+
+        /* Light theme surface overrides */
+        html[data-theme="light"] body { background-color: #fafafa; color: #18181b; }
+        html[data-theme="light"] .bg-zinc-950 { background-color: #f4f4f5 !important; }
+        html[data-theme="light"] .bg-zinc-900 { background-color: #ffffff !important; }
+        html[data-theme="light"] .bg-zinc-800 { background-color: #f4f4f5 !important; }
+        html[data-theme="light"] .hover\:bg-zinc-800:hover { background-color: #e4e4e7 !important; }
+        html[data-theme="light"] .text-zinc-100 { color: #18181b !important; }
+        html[data-theme="light"] .text-zinc-200 { color: #27272a !important; }
+        html[data-theme="light"] .text-zinc-300 { color: #3f3f46 !important; }
+        html[data-theme="light"] .text-zinc-400 { color: #52525b !important; }
+        html[data-theme="light"] .text-zinc-500 { color: #71717a !important; }
+        html[data-theme="light"] .hover\:text-zinc-100:hover { color: #09090b !important; }
+        html[data-theme="light"] .border-zinc-700 { border-color: #d4d4d8 !important; }
+        html[data-theme="light"] .border-zinc-800 { border-color: #e4e4e7 !important; }
+        html[data-theme="light"] aside { background-color: #ffffff !important; }
+        html[data-theme="light"] ::placeholder { color: #a1a1aa !important; }
+
+        .poster-card {
+            @apply relative rounded-lg overflow-hidden bg-zinc-900 border border-zinc-800
+                   transition-all duration-200 hover:border-zinc-600 hover:shadow-lg hover:shadow-black/20;
+        }
+        .poster-card img {
+            @apply w-full aspect-[2/3] object-cover bg-zinc-800;
+        }
+        .poster-card .card-body {
+            @apply p-3;
+        }
+
+        .filter-chip {
+            @apply px-3 py-1.5 rounded-full text-xs font-medium
+                   border border-zinc-700 text-zinc-400
+                   transition-all cursor-pointer select-none
+                   hover:border-zinc-500 hover:text-zinc-200;
+        }
+        .filter-chip.active {
+            @apply bg-indigo-500/15 border-indigo-500/50 text-indigo-300;
+        }
+
+        .category-tab {
+            @apply px-4 py-2 text-sm font-medium text-zinc-400
+                   border-b-2 border-transparent transition-all cursor-pointer
+                   hover:text-zinc-200;
+        }
+        .category-tab.active {
+            @apply text-zinc-100 border-indigo-500;
+        }
+    </style>
+</head>
+<body class="grid min-h-screen m-0 p-0 bg-zinc-950 text-zinc-100 md:grid-cols-[220px_1fr] grid-cols-1">
+    <aside class="md:sticky md:top-0 md:h-screen md:overflow-y-auto md:border-r md:border-zinc-700 bg-zinc-900 p-4 md:p-4 border-b border-zinc-700 md:border-b-0 md:flex md:flex-col">
+        <div class="px-3 pb-5 hidden md:flex items-center gap-2.5">
+            <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 120" class="w-7 h-7 text-indigo-500 shrink-0" fill="none" stroke="currentColor" stroke-width="18" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <path d="M105 60a45 45 0 1 1-45-45c12.6 0 24.65 5 33.7 13.7L105 40"/>
+                <path d="M105 15v25h-25"/>
+            </svg>
+            <span class="text-lg font-bold tracking-wide bg-gradient-to-br from-indigo-500 to-violet-400 bg-clip-text text-transparent">Reclaimer</span>
+        </div>
+        <nav class="md:flex-1">
+            <ul class="list-none p-0 m-0 flex md:flex-col gap-1 md:gap-0.5">
+                <li><a href="/" class="nav-link" {{if eq .Path "/"}}aria-current="page"{{end}}>
+                    <svg class="nav-icon" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M3 10V17h5v-4h4v4h5V10"/><path d="M1 10l9-8 9 8"/></svg>
+                    Leaving Soon</a></li>
+            </ul>
+            {{if .IsAdmin}}
+            <div class="mt-6 pt-4 border-t border-zinc-800">
+                <div class="px-3 mb-2 text-[10px] uppercase tracking-widest text-zinc-600 font-semibold">Admin</div>
+                <ul class="list-none p-0 m-0 flex md:flex-col gap-1 md:gap-0.5">
+                    <li><a href="/admin/rules" class="nav-link">
+                        <svg class="nav-icon" viewBox="0 0 20 20" fill="currentColor"><rect x="1" y="2" width="18" height="2.5" rx="1"/><rect x="1" y="8.5" width="18" height="2.5" rx="1"/><rect x="1" y="15" width="18" height="2.5" rx="1"/></svg>
+                        Rules</a></li>
+                    <li><a href="/admin/settings" class="nav-link">
+                        <svg class="nav-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z"/></svg>
+                        Settings</a></li>
+                </ul>
+            </div>
+            {{end}}
+        </nav>
+        <div class="hidden md:block mt-auto pt-3 border-t border-zinc-700 space-y-1">
+            <div class="flex items-center justify-between px-3 py-1.5">
+                <span id="sidebar-username" class="text-sm text-zinc-400 truncate"></span>
+                <button id="sidebar-logout" class="text-sm text-zinc-500 hover:text-zinc-300 transition-colors cursor-pointer">Sign out</button>
+            </div>
+            <button type="button" id="reclaimer-theme-toggle" class="theme-toggle" aria-label="Cycle theme">
+                <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg>
+                <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+                <svg class="icon-auto" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2.5" y="4" width="19" height="13" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+                <span class="label-dark">Dark mode</span>
+                <span class="label-light">Light mode</span>
+                <span class="label-auto">Auto mode</span>
+            </button>
+            <script>
+            (function() {
+                fetch('/auth/me').then(r => r.json()).then(data => {
+                    if (data.user) document.getElementById('sidebar-username').textContent = data.user.display_name || data.user.username;
+                }).catch(() => {});
+                document.getElementById('sidebar-logout').addEventListener('click', () => {
+                    fetch('/auth/logout', { method: 'POST' }).then(() => { window.location.href = '/login'; });
+                });
+            })();
+            </script>
+        </div>
+    </aside>
+    <script>
+    (function () {
+        const html = document.documentElement;
+        const mql = window.matchMedia('(prefers-color-scheme: light)');
+        function resolve(pref) { return pref === 'auto' ? (mql.matches ? 'light' : 'dark') : pref; }
+        function apply(pref) {
+            const resolved = resolve(pref);
+            html.setAttribute('data-theme', resolved);
+            html.setAttribute('data-theme-pref', pref);
+            html.classList.toggle('dark', resolved === 'dark');
+            try { localStorage.setItem('reclaimer-theme', pref); } catch (_) {}
+        }
+        mql.addEventListener('change', () => {
+            if (html.getAttribute('data-theme-pref') === 'auto') apply('auto');
+        });
+        const btn = document.getElementById('reclaimer-theme-toggle');
+        if (!btn) return;
+        const order = ['dark', 'light', 'auto'];
+        btn.addEventListener('click', () => {
+            const cur = html.getAttribute('data-theme-pref') || 'auto';
+            apply(order[(order.indexOf(cur) + 1) % order.length]);
+        });
+    })();
+    </script>
+    <main class="p-4 md:px-8 md:py-6 overflow-y-auto min-h-screen">
+        {{template "content" .}}
+    </main>
+</body>
+</html>
+{{end}}

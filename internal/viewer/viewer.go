@@ -34,15 +34,6 @@ func (s *Server) AuthRoutes() chi.Router {
 	return r
 }
 
-// LeavingRoutes returns routes mounted at /leaving (requires auth).
-func (s *Server) LeavingRoutes() chi.Router {
-	r := chi.NewRouter()
-	r.Use(s.requireAuth)
-	r.Get("/", s.handleLeavingPage)
-	r.Get("/items", s.handleLeavingItems)
-	r.Post("/items/{ratingKey}/keep", s.handleKeepItem)
-	return r
-}
 
 func (s *Server) hasAnyAdmins() bool {
 	var count int
