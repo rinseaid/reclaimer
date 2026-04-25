@@ -181,4 +181,42 @@ CREATE INDEX IF NOT EXISTS idx_activity_log_type ON activity_log(event_type);
 CREATE INDEX IF NOT EXISTS idx_activity_log_event_ts ON activity_log(event_type, timestamp);
 CREATE INDEX IF NOT EXISTS idx_activity_log_rk_ts ON activity_log(rating_key, timestamp DESC);
 CREATE INDEX IF NOT EXISTS idx_ratings_imdb ON ratings_cache(imdb_id);
+
+CREATE TABLE IF NOT EXISTS viewer_users (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    username         TEXT NOT NULL,
+    display_name     TEXT,
+    email            TEXT,
+    password_hash    TEXT,
+    auth_provider    TEXT NOT NULL DEFAULT 'local',
+    auth_provider_id TEXT,
+    avatar_url       TEXT,
+    is_active        BOOLEAN NOT NULL DEFAULT 1,
+    created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    updated_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    UNIQUE(auth_provider, auth_provider_id)
+);
+CREATE INDEX IF NOT EXISTS idx_viewer_users_email ON viewer_users(email);
+
+CREATE TABLE IF NOT EXISTS viewer_sessions (
+    id           TEXT PRIMARY KEY,
+    user_id      INTEGER NOT NULL REFERENCES viewer_users(id) ON DELETE CASCADE,
+    expires_at   TEXT NOT NULL,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now')),
+    user_agent   TEXT,
+    ip_address   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_viewer_sessions_user ON viewer_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_viewer_sessions_expires ON viewer_sessions(expires_at);
+
+CREATE TABLE IF NOT EXISTS keep_tokens (
+    id           INTEGER PRIMARY KEY AUTOINCREMENT,
+    token        TEXT NOT NULL UNIQUE,
+    rating_key   TEXT NOT NULL,
+    expires_at   TEXT NOT NULL,
+    used_at      TEXT,
+    created_by   TEXT,
+    created_at   TEXT NOT NULL DEFAULT (datetime('now'))
+);
+CREATE INDEX IF NOT EXISTS idx_keep_tokens_token ON keep_tokens(token);
 `

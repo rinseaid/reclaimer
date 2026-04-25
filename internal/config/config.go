@@ -49,6 +49,20 @@ var defaults = map[string]settingDef{
 	"torbox_api_key":                 {"", "TORBOX_API_KEY"},
 	"rd_api_key":                     {"", "RD_API_KEY"},
 	"user_sync_interval_hours":       {6, "USER_SYNC_INTERVAL_HOURS"},
+	"viewer_session_ttl_hours":       {168, "VIEWER_SESSION_TTL_HOURS"},
+	"viewer_plex_enabled":            {false, "VIEWER_PLEX_ENABLED"},
+	"viewer_jellyfin_enabled":        {false, "VIEWER_JELLYFIN_ENABLED"},
+	"viewer_oidc_enabled":            {false, "VIEWER_OIDC_ENABLED"},
+	"viewer_oidc_issuer_url":         {"", "VIEWER_OIDC_ISSUER_URL"},
+	"viewer_oidc_client_id":          {"", "VIEWER_OIDC_CLIENT_ID"},
+	"viewer_oidc_client_secret":      {"", "VIEWER_OIDC_CLIENT_SECRET"},
+	"viewer_oidc_redirect_uri":       {"", "VIEWER_OIDC_REDIRECT_URI"},
+	"viewer_oidc_scopes":             {"openid profile email", "VIEWER_OIDC_SCOPES"},
+	"viewer_oidc_display_name":       {"SSO", "VIEWER_OIDC_DISPLAY_NAME"},
+	"viewer_local_enabled":           {false, "VIEWER_LOCAL_ENABLED"},
+	"viewer_keep_token_secret":       {"", "VIEWER_KEEP_TOKEN_SECRET"},
+	"viewer_keep_token_ttl_hours":    {72, "VIEWER_KEEP_TOKEN_TTL_HOURS"},
+	"leaving_base_url":               {"", "LEAVING_BASE_URL"},
 }
 
 var sensitiveKeys = map[string]bool{
@@ -56,7 +70,9 @@ var sensitiveKeys = map[string]bool{
 	"seerr_api_key": true,
 	"torbox_api_key":  true,
 	"rd_api_key":      true,
-	"jellyfin_api_key": true,
+	"jellyfin_api_key":          true,
+	"viewer_oidc_client_secret": true,
+	"viewer_keep_token_secret":  true,
 }
 
 type Config struct {

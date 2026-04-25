@@ -171,4 +171,42 @@ DO $$ BEGIN
     CREATE UNIQUE INDEX idx_arr_instances_default ON arr_instances(kind) WHERE is_default = TRUE;
 EXCEPTION WHEN duplicate_table THEN NULL;
 END $$;
+
+CREATE TABLE IF NOT EXISTS viewer_users (
+    id               BIGSERIAL PRIMARY KEY,
+    username         TEXT NOT NULL,
+    display_name     TEXT,
+    email            TEXT,
+    password_hash    TEXT,
+    auth_provider    TEXT NOT NULL DEFAULT 'local',
+    auth_provider_id TEXT,
+    avatar_url       TEXT,
+    is_active        BOOLEAN NOT NULL DEFAULT TRUE,
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    UNIQUE(auth_provider, auth_provider_id)
+);
+CREATE INDEX IF NOT EXISTS idx_viewer_users_email ON viewer_users(email);
+
+CREATE TABLE IF NOT EXISTS viewer_sessions (
+    id           TEXT PRIMARY KEY,
+    user_id      BIGINT NOT NULL REFERENCES viewer_users(id) ON DELETE CASCADE,
+    expires_at   TIMESTAMPTZ NOT NULL,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    user_agent   TEXT,
+    ip_address   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_viewer_sessions_user ON viewer_sessions(user_id);
+CREATE INDEX IF NOT EXISTS idx_viewer_sessions_expires ON viewer_sessions(expires_at);
+
+CREATE TABLE IF NOT EXISTS keep_tokens (
+    id           BIGSERIAL PRIMARY KEY,
+    token        TEXT NOT NULL UNIQUE,
+    rating_key   TEXT NOT NULL,
+    expires_at   TIMESTAMPTZ NOT NULL,
+    used_at      TIMESTAMPTZ,
+    created_by   TEXT,
+    created_at   TIMESTAMPTZ NOT NULL DEFAULT NOW()
+);
+CREATE INDEX IF NOT EXISTS idx_keep_tokens_token ON keep_tokens(token);
 `
