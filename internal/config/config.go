@@ -59,6 +59,8 @@ var defaults = map[string]settingDef{
 	"viewer_oidc_redirect_uri":       {"", "VIEWER_OIDC_REDIRECT_URI"},
 	"viewer_oidc_scopes":             {"openid profile email", "VIEWER_OIDC_SCOPES"},
 	"viewer_oidc_display_name":       {"SSO", "VIEWER_OIDC_DISPLAY_NAME"},
+	"viewer_oidc_group_claim":        {"groups", "VIEWER_OIDC_GROUP_CLAIM"},
+	"viewer_oidc_admin_groups":       {"", "VIEWER_OIDC_ADMIN_GROUPS"},
 	"viewer_local_enabled":           {false, "VIEWER_LOCAL_ENABLED"},
 	"viewer_keep_token_secret":       {"", "VIEWER_KEEP_TOKEN_SECRET"},
 	"viewer_keep_token_ttl_hours":    {72, "VIEWER_KEEP_TOKEN_TTL_HOURS"},

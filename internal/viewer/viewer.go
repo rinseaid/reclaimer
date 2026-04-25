@@ -25,8 +25,8 @@ func (s *Server) AuthRoutes() chi.Router {
 	r.Post("/logout", s.handleLogout)
 	r.Post("/login", s.handleLocalLogin)
 	r.Post("/register", s.handleLocalRegister)
-	r.Post("/plex/pin", s.handlePlexPin)
-	r.Get("/plex/pin/{pinId}", s.handlePlexPinCheck)
+	r.Get("/plex/redirect", s.handlePlexRedirect)
+	r.Get("/plex/callback", s.handlePlexCallback)
 	r.Post("/jellyfin/login", s.handleJellyfinLogin)
 	r.Get("/oidc/authorize", s.handleOIDCAuthorize)
 	r.Get("/oidc/callback", s.handleOIDCCallback)
@@ -44,14 +44,14 @@ func (s *Server) LeavingRoutes() chi.Router {
 	return r
 }
 
-func (s *Server) hasAnyUsers() bool {
+func (s *Server) hasAnyAdmins() bool {
 	var count int
-	s.DB.Get(&count, "SELECT COUNT(*) FROM viewer_users")
+	s.DB.Get(&count, "SELECT COUNT(*) FROM viewer_users WHERE is_admin = 1")
 	return count > 0
 }
 
 func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
-	bootstrap := !s.hasAnyUsers()
+	bootstrap := !s.hasAnyAdmins()
 
 	plexURL := s.Config.GetString("plex_url")
 	jellyfinURL := s.Config.GetString("jellyfin_url")

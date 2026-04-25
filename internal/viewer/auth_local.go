@@ -35,6 +35,12 @@ func (s *Server) handleLocalLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !s.hasAnyAdmins() && !user.IsAdmin {
+		s.DB.Exec(s.DB.Rebind("UPDATE viewer_users SET is_admin = 1 WHERE id = ?"), user.ID)
+		user.IsAdmin = true
+		slog.Info("bootstrap: promoted user to admin on login", "username", user.Username)
+	}
+
 	if err := s.createSession(w, r, user.ID); err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "failed to create session"})
 		return
@@ -44,7 +50,7 @@ func (s *Server) handleLocalLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleLocalRegister(w http.ResponseWriter, r *http.Request) {
-	bootstrap := !s.hasAnyUsers()
+	bootstrap := !s.hasAnyAdmins()
 	if !bootstrap && !s.Config.GetBool("viewer_local_enabled") {
 		writeJSON(w, http.StatusForbidden, map[string]string{"error": "local auth disabled"})
 		return

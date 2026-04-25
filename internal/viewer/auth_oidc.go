@@ -107,16 +107,18 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var claims struct {
-		Sub               string `json:"sub"`
-		PreferredUsername  string `json:"preferred_username"`
-		Name              string `json:"name"`
-		Email             string `json:"email"`
-		Picture           string `json:"picture"`
+		Sub              string `json:"sub"`
+		PreferredUsername string `json:"preferred_username"`
+		Name             string `json:"name"`
+		Email            string `json:"email"`
+		Picture          string `json:"picture"`
 	}
 	if err := idToken.Claims(&claims); err != nil {
 		http.Error(w, "failed to parse claims", http.StatusInternalServerError)
 		return
 	}
+
+	isAdmin := s.oidcCheckAdminGroup(idToken)
 
 	// Also try userinfo for more complete data
 	userInfo, err := provider.UserInfo(ctx, oauth2.StaticTokenSource(token))
@@ -172,6 +174,11 @@ func (s *Server) handleOIDCCallback(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if isAdmin && !viewerUser.IsAdmin {
+		s.DB.Exec(s.DB.Rebind("UPDATE viewer_users SET is_admin = 1 WHERE id = ?"), viewerUser.ID)
+		viewerUser.IsAdmin = true
+	}
+
 	if err := s.createSession(w, r, viewerUser.ID); err != nil {
 		http.Error(w, "failed to create session", http.StatusInternalServerError)
 		return
@@ -209,4 +216,42 @@ func (s *Server) oidcConfig(ctx context.Context) (*oauth2.Config, *oidc.Provider
 	}
 
 	return cfg, provider, nil
+}
+
+func (s *Server) oidcCheckAdminGroup(idToken *oidc.IDToken) bool {
+	groupClaim := s.Config.GetString("viewer_oidc_group_claim")
+	adminGroupsRaw := s.Config.GetString("viewer_oidc_admin_groups")
+	if groupClaim == "" || adminGroupsRaw == "" {
+		return false
+	}
+
+	var allClaims map[string]any
+	if err := idToken.Claims(&allClaims); err != nil {
+		return false
+	}
+
+	rawGroups, ok := allClaims[groupClaim]
+	if !ok {
+		return false
+	}
+
+	groupList, ok := rawGroups.([]any)
+	if !ok {
+		return false
+	}
+
+	adminGroups := make(map[string]bool)
+	for _, g := range strings.Split(adminGroupsRaw, ",") {
+		g = strings.TrimSpace(g)
+		if g != "" {
+			adminGroups[g] = true
+		}
+	}
+
+	for _, g := range groupList {
+		if s, ok := g.(string); ok && adminGroups[s] {
+			return true
+		}
+	}
+	return false
 }
